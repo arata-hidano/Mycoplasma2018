@@ -45,6 +45,8 @@ int const id_bull_group = 6;
 #define interval_heat_max 24  // interval between oestrus events maximum
 #define av_gestation 282
 #define error_gestation 10
+#define heifer_puberty 365 // reaches puberty and starts heat
+#define heifer_puberty_error 30 //margin for reaching puberty
 //#define calf_mortality 0.041
 //#define R1_mortality 0.017
 //#define R2_mortality 0.017
@@ -73,7 +75,7 @@ char NumberAnimalDataFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/
 
 
 /* Define heifer related parameters*/ 
-
+int first_heat_rand ;
 /* Define lactating and non-lactating related parameters*/
 //int num_total_groups = num_total_herd * (id_bull_group + 1) ; // gives the total number of groups
 
@@ -157,10 +159,9 @@ void visualize_list() ;
 /*======================================================================
 Initialise calving date, age, pregnant status, disease status etc
 =======================================================================*/
-int current_akey = 0 ;
-double today_date = 0 ;
+
 //int fortnight_num = floor(today_date/14) ; //0-364 days, Day 364 becomes week 26, need to make it wek 25
-int year = 0;
+
 int mng_group ;
 int age_cat ;
 int current_age ;
@@ -185,6 +186,11 @@ double updated_date ;
 /*Main starts from here*/
 int main(void){
 srand((unsigned)time(NULL));
+int current_akey = 0 ;
+double today_date = 0 ;
+int year = 0;
+int calendar_day = 0;
+
 num_culled = &var_cull;
 num_sold = &var_sold;
 num_death = &var_death;
@@ -193,7 +199,7 @@ fake_animal = (struct animal_node*)malloc(sizeof( struct animal_node ));
 
 printf("Starts");	
 double** List_mng_status =  (double**)malloc( sizeof(double *) *7); //modify if more than one herd exists	
-struct animal_node **animal_node_pointer = (struct animal_node**)malloc( sizeof(struct animal_node*) * length_animal_pointer);
+struct animal_node **animal_node_pointer = malloc( sizeof(struct animal_node*) * length_animal_pointer);
 double **cull_sell_rate = (double**)malloc( sizeof(double *) *num_cull_sell_steps );
 double **mortality = (double**)malloc( sizeof(double *) *num_mortality_steps );
 double **NumGrpAnimal = (double**)malloc( sizeof(double *) *(id_bull_group+2) );
@@ -276,8 +282,9 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	current_index_cull_sell = 6;
 	current_index_mortality = 2 ;
 	next_cull_change_date = cull_sell_rate[current_index_cull_sell+1][0] - current_age ;
-	
-	animal_node_pointer[current_akey] =(struct animal_node*)malloc(sizeof(struct animal_node)) ;
+	next_mortality_change_date = mortality[current_index_mortality+1][0] - current_age ;
+		
+	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
 	animal_node_pointer[current_akey]->akey = current_akey;
 	animal_node_pointer[current_akey]->age_day = current_age ;
 	animal_node_pointer[current_akey]->index_cull_sell = current_index_cull_sell ;
@@ -297,7 +304,16 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	
 	animal_node_pointer[current_akey]->sum_markov_rate = markov_rate ;
 	add_animal_group(FarmGroupList,mng_group, animal_node_pointer[current_akey]) ;
-	/*============ADDING EVENTS TO CHANGE CULLING iNDEX==========================*/
+	/*============ADDING EVENTS===================================================*/
+	/*Heat*/
+	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+	new_event->event_type = 2 ;
+	new_event->akey = current_akey;
+	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
+	new_event->next_node = NULL ;
+	first_heat_rand = rand()%heifer_puberty_error+heifer_puberty;
+	add_event_node(event_day,(first_heat_rand-current_age), new_event) ;
+	/*============CHANGE CULLING iNDEX==========================*/
 	//need to add an event that changes this animals culling rate
 	//but not for mortality because mortality changes when they calve
 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
@@ -308,24 +324,30 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
 	new_event->next_node = NULL ;
 	add_event_node(event_day,next_cull_change_date, new_event) ;
+	/*============CHANGE MORTALITY iNDEX==========================*/
+	//need to add an event that changes this animals culling rate
+	//but not for mortality because mortality changes when they calve
+	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+	new_event->event_type = 4;//change in culling index
+	//  no need to specify the next mortality index change date because that happens after 
+	// the animal becomes 2 yrs old
+	new_event->akey = current_akey;
+	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
+	new_event->next_node = NULL ;
+	add_event_node(event_day,next_mortality_change_date, new_event) ;
+	
 	current_akey ++;
 	List_mng_status[mng_group][0] ++;
 
 
 }
-/*ADD EVENT WHEN R1 MOVES INTO R2 FOR YEAR 1*/
-//usually it's when the youngest retained calf becomes 13 weeks old
-//but in Year 1 there is no calf, so have to set a date
-//that is when youngest R1 reaches 1yr + 13 weeks old
-//youngest here is 314 days, means 456 days which is 140 days later
-new_event = (struct event_node*)malloc(sizeof( struct event_node ));
-new_event->event_type = 8;//moving C to R1 and R1 to R2
-new_event->next_node = NULL ;
-new_event->animal = fake_animal ;
-add_event_node(event_day,140, new_event) ;
+
+
 
 
 printf("R1 added");
+
+	
 /*==================R2 HEIFER================================================================*/
 for(i=0; i< herd_size * replacement_prop; i++ )
 {
@@ -344,8 +366,10 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	current_index_mortality = 3 ;
 	next_mortality_change_date = mortality[current_index_mortality+1][0] - current_age ;
 	
-	animal_node_pointer[current_akey] =(struct animal_node*)malloc(sizeof(struct animal_node)) ;
+	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
 	animal_node_pointer[current_akey]->akey = current_akey;
+	
+	
 	animal_node_pointer[current_akey]->age_day = current_age ;
 	animal_node_pointer[current_akey]->index_cull_sell = current_index_cull_sell ;
 	animal_node_pointer[current_akey]->index_mortality = current_index_mortality ;
@@ -369,26 +393,26 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	
 	if(i<herd_size * replacement_prop *calv_3weeks)
 	{
-		calving_date =  today_date + rand()%21 + PSC ; //note today_date = 0
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date =  (int)today_date + rand()%21 + PSC ; //note today_date = 0
+//		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	else if(i<herd_size * replacement_prop *calv_6weeks)
 	{
-		calving_date = today_date + rand()%21 + 21 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;	
+		calving_date = (int)today_date + rand()%21 + 21 + PSC ;
+//		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;	
 	}
 	else if(i<herd_size * replacement_prop *calv_9weeks)
 	{
-		calving_date = today_date + rand()%21 + 42 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date = (int)today_date + rand()%21 + 42 + PSC ;
+//		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	else
 	{
-		calving_date = today_date + rand()%7 + 63 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date = (int)today_date + rand()%7 + 63 + PSC ;
+//		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	animal_node_pointer[current_akey]->calving_date = calving_date;
-	animal_node_pointer[current_akey]->next_heat_date = next_heat_date ;
+//	animal_node_pointer[current_akey]->next_heat_date = next_heat_date ;
 	
 	/*========== ADDING EVENTS========================================================*/
 	//create calving event: calving, heat and mortality and culling index change
@@ -399,12 +423,12 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	new_event->next_node = NULL ;
 	add_event_node(event_day,calving_date, new_event) ;
 	//create heat event
-	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
-	new_event->event_type = 2;//heat
-	new_event->akey = current_akey;
-	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
-	new_event->next_node = NULL ;
-	add_event_node(event_day,next_heat_date, new_event) ;
+//	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+//	new_event->event_type = 2;//heat
+//	new_event->akey = current_akey;
+//	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
+//	new_event->next_node = NULL ;
+//	add_event_node(event_day,next_heat_date, new_event) ;
 	//create event that indicates when culling/mortality index should change
 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 	new_event->event_type = 3;//change in culling index
@@ -436,7 +460,7 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 	mng_group = 4 ;//dry group when started
 	temp_prop = (double)rand()/(double)RAND_MAX ; //get a random value between 0 and 1
 	
-	animal_node_pointer[current_akey] =(struct animal_node*)malloc(sizeof(struct animal_node)) ;
+	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
 	animal_node_pointer[current_akey]->group = mng_group ;
 	animal_node_pointer[current_akey]->akey = current_akey;
 	animal_node_pointer[current_akey]->pregnant_status = 1;
@@ -577,41 +601,45 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 	animal_node_pointer[current_akey]->num_births = age_indicator - 1 ;// assuming cows have claved every year
 	if(i<herd_size * replacement_prop *calv_3weeks)
 	{
-		calving_date =  today_date + rand()%21 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date =  (int)today_date + rand()%21 + PSC ;
+	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	else if(i<herd_size * replacement_prop *calv_6weeks)
 	{
-		calving_date = today_date + rand()%21 + 21 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;	
+		calving_date = (int)today_date + rand()%21 + 21 + PSC ;
+	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;	
 	}
 	else if(i<herd_size * replacement_prop *calv_9weeks)
 	{
-		calving_date = today_date + rand()%21 + 42 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date = (int)today_date + rand()%21 + 42 + PSC ;
+	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	else
 	{
-		calving_date = today_date + rand()%7 + 63 + PSC ;
-		next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
+		calving_date = (int)today_date + rand()%7 + 63 + PSC ;
+	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
 	animal_node_pointer[current_akey]->calving_date = calving_date;
-	animal_node_pointer[current_akey]->next_heat_date = next_heat_date ;
+	//animal_node_pointer[current_akey]->next_heat_date = next_heat_date ;
 	//printf("Adding event");
 	/*ADD EVENTS*/
 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+	
 	new_event->event_type = 1;//calving
 	new_event->akey = current_akey;
+	//printf("address is %i akey is %lld\n",&new_event->akey,new_event->akey);
 	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
 	new_event->next_node = NULL ;
 	add_event_node(event_day,calving_date, new_event) ;
 	
-	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
-	new_event->event_type = 2;//heat
-	new_event->akey = current_akey;
-	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
-	new_event->next_node = NULL ;
-	add_event_node(event_day,next_heat_date, new_event) ;
+//	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+//	new_event->event_type = 2;//heat
+//	new_event->akey = current_akey;
+	//printf("address is %i akey is %lld\n\n",&new_event->akey,new_event->akey);
+	//system("pause");
+//	new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
+//	new_event->next_node = NULL ;
+//	add_event_node(event_day,next_heat_date, new_event) ;
 	
 		//create event that indicates when culling/mortality index should change
 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
@@ -645,12 +673,17 @@ for(i=0;i<sim_years;i++)
 
 /*Create fake animal that moving event can point to*/
 
-
+int num_pregnant = 0;
+int num_submission = 0;
+int num_heat = 0 ;
+int num_add_heat = 0;
 /*============================================================================================
 Day procedes
 =============================================================================================*/
 while(today_date<=sim_years*365)
 {
+	year = (int)floor(today_date/365);
+	calendar_day = today_date - year*365 ;
 //	printf("today is %lf",today_date) ;
 	//visualize_list(event_day,0) ;
 /*====START OF DAY========================================================*/
@@ -668,22 +701,27 @@ next_non_markov_date = ceil(today_date);
 	 	//trial
 	 	current_animal = current_event->animal; 	
 	 	previous_event = current_event;
-	 	while(current_event->animal==NULL)
+	 	while(current_event->animal->present==0)
 	 	{
-	 		printf("This event does not exist anymore!");
-	 		system("pause");
+	 	//	printf("This event does not exist anymore!");
+	 	//	system("pause");
 	 		current_event = current_event->next_node;
+	 	//	if(current_event->event_type==2)
+	 	//	{
+	 	//		printf("Heat cancelled 1");
+	 	//		system("pause");
+		//	 }
 	 		free(previous_event);
 	 		previous_event = current_event;
 	 		if(current_event==NULL)
 	 		{
-	 			printf("current event becomes null");
+	 		//	printf("current event becomes null");
 	 			break;
 	 			
 			 }
 		 }
 	 	event_day[next_non_markov_date] = current_event ;
-	 	printf("Head updated");
+	 //	printf("Head updated");
 	while(current_event!=NULL)
 	{
 	//	printf("Type is %d",current_event->event_type) ;
@@ -692,15 +730,23 @@ next_non_markov_date = ceil(today_date);
 	//	printf("C");
 		break;
 	}
-	while(current_event->next_node->animal==NULL)
+	while(current_event->next_node->animal->present==0)
 		{
+		//	if(current_event->next_node->event_type==2)
+	 	//	{
+	 			//printf("Heat cancelled 2");
+	 			//system("pause");
+			// }
 			if(current_event->next_node->next_node!=NULL)
 			{
 			//	printf("A1\n");
 				next_event = current_event->next_node->next_node;
+			//	printf("Animal removed is %lld",current_event->next_node->animal->akey);
 				free(current_event->next_node);
+				//printf("This type is %d",current_event->next_node->event_type);
 				current_event->next_node = next_event ;
 			//	printf("A2\n");
+			//	system("pause");
 			}
 			else
 			{
@@ -753,7 +799,13 @@ printf("After update");
     /*======== CALVING==========================================*/
      	if(current_event->event_type==1)
      	{
+     		
 		    current_animal = current_event->animal ;
+		    if(current_animal->pregnant_status==0)
+		    {
+		    	printf("Wait!She is not pregnant!\n");
+		    	system("pause");
+			}
      		current_grp = current_animal->group ;
      		printf("akey is %lld",current_animal->akey);
      //		printf("event is %d\n",current_event->event_type);
@@ -765,24 +817,8 @@ printf("After update");
 			 if(current_animal->present == 0)
 			 {
 			 	printf("wait! Ghost cow calving!");
-			 	//free(current_event->animal);//this should free but it's not freeing animal
-			 	
-			//free(animal_node_pointer);
-		
-			printf("akey is %lld",animal_node_pointer[current_animal->akey]->akey);
-		
-			 //	current_animal = NULL;
-			 	if(current_animal==NULL)//this is not true
-			 	{
-			 		printf("animal is free");
-				 }
-			 	if(current_event->animal==NULL) //this is not true because free'd memory is not null
-			 	{
-			 		printf("Yes nulled");
-				 }
-			 	printf("akey is %lld",current_event->animal->akey);
-			 	printf("akey is %lld",animal_node_pointer[current_animal->akey]->akey);
-			 	system("pause");
+			 		system("pause");
+			 
 			 }
 			
      		//this animal anyway move into Lactation group[3]
@@ -817,6 +853,7 @@ printf("After update");
 			new_event->next_node = NULL ;
 			if(next_heat_date<sim_days)
 			{
+				num_add_heat++;
 				add_event_node(event_day,next_heat_date, new_event) ;
 			}
 			
@@ -825,12 +862,13 @@ printf("After update");
      	{
      		//do we record the number of bobbied ?
      		//maybe not, but in future calf movement should be considered
-     		printf("Do not keep any more calf!\n");
+     		//printf("Do not keep any more calf!\n");
+     		
 		 }
 		 else if((double)rand()/(double)RAND_MAX<=calf_female_prop) //proportion of female and male 0.5
 		 {
 		 // Keep at farm new born calves
-     	animal_node_pointer[current_akey] =(struct animal_node*)malloc(sizeof(struct animal_node)) ;
+     	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
 		animal_node_pointer[current_akey]->akey = current_akey;	
 		animal_node_pointer[current_akey]->age_day = 0; //just born
 		animal_node_pointer[current_akey]->index_cull_sell = 0;
@@ -846,16 +884,23 @@ printf("After update");
 		List_mng_status[id_calf_group][0]++;
 	//	printf("Calf size is %lf\n",List_mng_status[0][0]);
 		//if this is the last animal to be kept
-		if(List_mng_status[0][0]>=herd_size * calf_keep_prop)
+		if(List_mng_status[0][0]==herd_size * calf_keep_prop)
 		{
+		printf("Target calf number %d secured Day %d\n",(int)List_mng_status[0][0],next_non_markov_date);
+		printf("Calendar is %d", calendar_day);
+		system("pause")	;
 		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 		new_event->event_type = 8; //moving to the next group
 		new_event->next_node = NULL ;
 		new_event->animal = fake_animal;
+	//	printf("Lact number is %d",(int)List_mng_status[id_lact_group][0]);
+	//	system("pause");
 	//	printf("setting up move date") ;
 		if(next_non_markov_date+91<sim_years*365)
 		{
-			add_event_node(event_day,(int)next_non_markov_date+91, new_event) ;//animals move to the next age group
+			add_event_node(event_day,next_non_markov_date+91, new_event) ;//animals move to the next age group
+		printf("Moving event is %d",next_non_markov_date+91);
+	
 		}
 	//	printf("last calf to add\n");
 		}
@@ -898,11 +943,27 @@ printf("After update");
 		 {
 	//	 	printf("event is %d\n",current_event->event_type);
 		 	//Heat
-		
-		 		if((double)rand()/(double)RAND_MAX<=submission_prop )	//submission happen
+		//printf("Calendar is %d grp is %d",calendar_day,current_event->animal->group);
+		//system("pause");
+			num_heat++;
+			current_animal = current_event->animal;
+			if(current_animal->pregnant_status==1)
+			{
+			printf("Heat but pregnant grp is %d day is %d",current_animal->group, next_non_markov_date);
+		 	printf("Calving date is %d",current_animal->calving_date);
+		 	if(current_animal->present==0)
+		 	{
+		 		printf("Ghost heat");
+			 }
+			 system("pause");
+			}
+		 		if(((double)rand()/(double)RAND_MAX<=submission_prop ) && 
+				 current_animal->pregnant_status==0 &&
+				 calendar_day>=PSM)	//submission happen
 		 		{
-		 			int conception_rate;
-		 			if(today_date-365*year-PSM <=7*mating_week_AI)
+		 			num_submission++;
+		 			double conception_rate;
+		 			if(next_non_markov_date-365*year-PSM <=7*mating_week_AI)
 		 			{
 		 				conception_rate = conception_AI ;
 					 }
@@ -912,33 +973,36 @@ printf("After update");
 					 }
 		 			if((double)rand()/(double)RAND_MAX <= conception_rate)
 					 {
-					 	struct animal_node* current_animal;
-					 	current_animal = current_event->animal;
-					 	current_event->animal->pregnant_status = 1 ;
+					 	current_animal->pregnant_status = 1 ;
+					 	
+					 //	printf("animal pregnant");
+					 //	system("pause");
 					 	//add calving event
-					 	calving_date = rand()%error_gestation*2 - error_gestation + today_date ;
-					 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+					 	calving_date = av_gestation+ rand()%error_gestation*2 - error_gestation + next_non_markov_date ;
+					 	current_animal->calving_date = calving_date;
+						 new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 						new_event->event_type = 1;//calving
+						num_pregnant++;
 						new_event->akey = current_event->akey;
 						new_event->animal = current_event->animal; //let's see if this works
 						new_event->next_node = NULL ;
 								if(calving_date<sim_years*365)
-			{
-			add_event_node(event_day,calving_date, new_event) ;
-		}
+						{
+						add_event_node(event_day,calving_date, new_event) ;
+						}
 						
 					}
 						
 				 } // then otherwise set up next heat date
-				 else
+				 if(current_animal->pregnant_status==0)
 				 {
-				 		next_heat_date = rand()%interval_heat + interval_heat_min ;
+				 		next_heat_date = rand()%interval_heat + interval_heat_min + next_non_markov_date;
 				 		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 						new_event->event_type = 2;//calving
 						new_event->akey = current_event->akey;
 						new_event->animal = current_event->animal; //let's see if this works
 						new_event->next_node = NULL ;
-						if(calving_date<sim_years*365)
+						if(next_heat_date<sim_years*365)
 			                  {
 			            add_event_node(event_day,next_heat_date, new_event) ;
 		                      }
@@ -1041,21 +1105,28 @@ printf("After update");
 	/*===========Move to next subgroup========================================*/
 	if(current_event->event_type==8)
 	{
+		printf("Moving Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
+			printf("Now Lact is %d",(int)List_mng_status[id_lact_group][0]);
+			system("pause");
 	//	printf("event is %d\n",current_event->event_type);
 		if(FarmGroupList[2]!=NULL)
 		{
-			printf("There are still animals in R2!\n") ;
-			//these animals will be culled
 			current_animal = FarmGroupList[2];
+			printf("There are still animals in R2! Day is %d\n",next_non_markov_date) ;
+			
+			//these animals will be culled
+			
 			while(current_animal!=NULL)
 			{
 				next_animal = current_animal->next_node;
 				remove_animal_group(FarmGroupList,id_r2_group,current_animal);
-				free(current_animal);
+				current_animal->present = 0;
 				List_mng_status[id_r2_group][0]--;
 				(*num_culled)++;
 				current_animal = next_animal ;
 			}
+			printf("Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
+			system("pause");
 			FarmGroupList[2] = NULL;
 		}
 		if(FarmGroupList[1]==NULL)
@@ -1112,6 +1183,12 @@ printf("After update");
 	/*================Drying off=====================================*/
 		if(current_event->event_type==9)
 	{//cows go from 3 to 4 
+	int num_lact = 0;
+	int num_dry = 0;
+	int num_culled_nonpregnant = 0;
+	int num_pregnant_at_dry = 0;
+	printf("pregnant is %d submission is %d heat is %d adding heat is %d",num_pregnant,num_submission,num_heat,num_add_heat);
+	system("pause");
 	//	printf("event is %d\n",current_event->event_type);
 		if(FarmGroupList[id_lact_group]==NULL)
 		{
@@ -1123,6 +1200,7 @@ printf("After update");
 			if(FarmGroupList[id_dry_group]!=NULL)
 			{
 				printf("There are already dry animals!\n") ;
+				system("pause");
 			}
 			else
 			{
@@ -1133,15 +1211,27 @@ printf("After update");
 					next_animal = current_animal->next_node;
 					if(current_animal->pregnant_status==0)//if not pregnant
 					{
+						printf("akey is %lld",current_animal->akey);
 						remove_animal_group(FarmGroupList,id_lact_group,current_animal);
-						free(current_animal);
+						current_animal->present = 0 ;
 						(*num_culled)++;
+						num_culled_nonpregnant++;
+						printf("Non-pregnant culled");
+					//	system("pause");
 						List_mng_status[id_lact_group][0]--;
 					}
 					current_animal = next_animal ;
+					num_lact++;
 				}
 				current_animal = FarmGroupList[id_lact_group] ;//get the first animal again
 				FarmGroupList[id_dry_group] = current_animal;
+				while(current_animal!=NULL)
+				{
+					num_dry++;
+					current_animal = current_animal->next_node ;
+				}
+				printf("Lact was %d, Dry is %d Cull is %d",num_lact, num_dry,num_culled_nonpregnant);
+				system("pause");
 				FarmGroupList[id_lact_group]=NULL;
 				temp_num_animal = List_mng_status[id_lact_group][0];
 				List_mng_status[id_lact_group][0]=0;
@@ -1172,14 +1262,14 @@ printf("After update");
        {
       //	printf("next event is NULL\n") ;
 	   }
-	   printf("now free event");
+	  // printf("now free event");
 	   free(previous_event);///check if this works - previously this was in if(current_event!=NULL) blacket
-	   printf("event was %d",previous_event->event_type);
-	   system("pause");
+	  // printf("event was %d",previous_event->event_type);
+	  // system("pause");
 	   event_day[next_non_markov_date] = current_event;
 	   //printf("event pointing new event\n") ;
      }
-     printf("day is over\n");
+    // printf("day is over\n");
     for(i=0;i<id_bull_group+1;i++)
 	{
 		//printf("number is %lf",List_mng_status[i][0]);
@@ -1488,10 +1578,10 @@ else // if previous node is null
 current_animal->present = 0;
 	/*==Removing animal done=========================*/
 
-	printf("free now");
-	printf("akey is %lld",current_animal->akey) ;
+//	printf("free now");
+//	printf("akey is %lld",current_animal->akey) ;
 //	free(current_animal) ; //free memory
-	printf("free done");
+//	printf("free done");
 //	printf("akey is %lld",current_animal->akey) ;
 //	system("pause");
 	}
