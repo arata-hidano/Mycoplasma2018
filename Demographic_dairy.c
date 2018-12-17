@@ -1,6 +1,7 @@
  /*===========================================================
 Mycoplasma project
 1. Demographic model - 2018/10
+2. Starting date June 1
 =============================================================*/
 
 /*==================================================================
@@ -17,6 +18,13 @@ DEFINE PARAMETER & STRUCTURE
 #include <ctype.h>
 
 /* Define variables*/
+/*Variables that can change according to the start date*/
+#define PSC 62 //Planned start of calving, set as 1 August which is 62 days
+#define PSM 144 //Planned start of mating, set as 22 October
+int dry_day = 334; //May 1st
+int r1_initial_age = 304; //As of June 1st, they are max 304 days old
+
+/*Other parameters*/
 #define herd_size 400
 #define num_total_herd 1
 #define id_calf_group 0
@@ -37,8 +45,7 @@ int const id_bull_group = 6;
 #define conception_bull 0.55
 #define mating_week_AI 6
 #define mating_week_bull 4
-#define PSC 30 //Planned start of calving, set as 1 August which is 30 days
-#define PSM 92 //Planned start of mating, set as 1 October
+
 #define time_first_heat_min 10  // days until the first oestrus minimum value
 #define time_first_heat_max 49  // days until the first Oestrus maximum value
 #define interval_heat_min 18  // interval between oestrus events minimum
@@ -51,7 +58,7 @@ int const id_bull_group = 6;
 //#define R1_mortality 0.017
 //#define R2_mortality 0.017
 //#define mixed_mortality 0.017
-#define weaning_wks 13 
+#define weaning_wks 10 
 #define sim_years 3
 #define num_extra_animal_per_year 150
 
@@ -97,7 +104,7 @@ int num_age_cat = 10 ;//0,1,2,3,4,5,6,7,8,9 and just repeat 9yrs rate
 /* Define simulation related parameters*/
 int sim_days = sim_years*365;
 int length_animal_pointer = herd_size + num_extra_animal_per_year*sim_years ;
-int dry_day = 304;
+
 //remaining will give a birth between 63 (9weeks) and 70 (10weeks)
 
 /* Define hospital group related parameters*/
@@ -276,9 +283,8 @@ Add R1/R2/Dry to the linked list*/
 for(i=0; i< herd_size * replacement_prop; i++ )
 {
 	mng_group = 1 ;
-	 //R1 heifers should be between 314 and 334 days old
-	// between 314 and 334
-	current_age =  rand()%21+314 ;
+	 //R1 heifers should be between 284 and 304 days old
+	current_age =  r1_initial_age - rand()%21 ;
 	current_index_cull_sell = 6;
 	current_index_mortality = 2 ;
 	next_cull_change_date = cull_sell_rate[current_index_cull_sell+1][0] - current_age ;
@@ -352,18 +358,18 @@ printf("R1 added");
 for(i=0; i< herd_size * replacement_prop; i++ )
 {
 	mng_group = 2 ;
-	current_age = rand()%20+322+365;
-	//R2 heifers should be between 687 and 706 days old
-	if(current_age <= 700)
-	{
+	current_age = 365+r1_initial_age-rand()%21;
+	//R2 heifers should be between 649 and 669 days old
+//	if(current_age <= 700)
+//	{
 		current_index_cull_sell = 12;	
-	}
-	else
-	{
-		current_index_cull_sell = 13;
-	}
+//	}
+//	else
+//	{
+	//	current_index_cull_sell = 13;
+//	}
 	next_cull_change_date = cull_sell_rate[current_index_cull_sell+1][0] - current_age ;
-	current_index_mortality = 3 ;
+	current_index_mortality = 2 ;
 	next_mortality_change_date = mortality[current_index_mortality+1][0] - current_age ;
 	
 	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
@@ -473,11 +479,20 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 		/*ASSIGN A RANDOM AGE*/
 		if(temp_prop<prop_age_2)
 		{
-		current_age = rand()%20+314+365*2;
+		current_age = r1_initial_age+365*2-rand()%21;
 		animal_node_pointer[current_akey]->age_day =  current_age ;
-		//age between 1044-1063
+		//age between 1014-1034
+		if(current_age<=1021)
+		{
+			current_index_cull_sell = 17;
+			current_index_mortality = 4;
+		}
+		else
+		{
 		current_index_cull_sell = 18 ;
-		current_index_mortality = 4 ;
+		current_index_mortality = 4 ;	
+		}
+		
 		age_indicator = 2 ;
 		age_cat = 3 ;
 		//printf("Age 2");
@@ -486,11 +501,16 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 		else if(temp_prop<sum_age_prop_4)
 		{
 		age_indicator = rand()%2+3 ;//3 or 4
-		current_age = rand()%20+314+365*age_indicator;//1409 and 1428
+		current_age = r1_initial_age+365*age_indicator-rand()%21;//1379 and 1764
 		animal_node_pointer[current_akey]->age_day = current_age; 
 		
 		age_cat = 4 ; 
-		if(current_age<=1427)
+		if(current_age<=1385)
+		{
+		current_index_cull_sell = 23 ;
+		current_index_mortality = 6 ;
+		}
+		else if(current_age<=1427)
 		{
 		current_index_cull_sell = 24 ;
 		current_index_mortality = 6 ;	
@@ -515,11 +535,16 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 		/*AGE 5/6/7*/
 		else if(temp_prop<sum_age_prop_7)
 		{
-		age_indicator = rand()%3+5 ;
+		age_indicator = rand()%3+5 ;//2109-2859
 		age_cat = 5 ;
-		current_age = rand()%20+314+365*age_indicator;
+		current_age = r1_initial_age+365*age_indicator-rand()%21;
 		animal_node_pointer[current_akey]->age_day =  current_age ;
-		if(current_age<=2155)
+		if(current_age<=2113)
+		{
+		current_index_cull_sell = 35 ;
+		current_index_mortality = 10 ;	
+		}
+		else if(current_age<=2155)
 		{
 		current_index_cull_sell = 36 ;
 		current_index_mortality = 10 ;	
@@ -556,17 +581,22 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 		{
 		age_indicator = 8 ;
 		age_cat = 6 ;
-		current_age = rand()%20+314+365*age_indicator;
+		current_age = r1_initial_age+365*age_indicator-rand()%21; //3204-3224
 		animal_node_pointer[current_akey]->age_day = current_age ;
+		if(current_age<=3205)
+		{
+		current_index_cull_sell = 53 ;
+		current_index_mortality = 16 ;
+		}
 		if(current_age<=3247)
 		{
-		current_index_cull_sell = 55 ;
-		current_index_mortality = 17 ;
+		current_index_cull_sell = 54 ;
+		current_index_mortality = 16 ;
 		}
 		else
 		{
 		current_index_cull_sell = 56 ;
-		current_index_mortality = 18 ;
+		current_index_mortality = 17 ;
 		}
 		printf("Age 8");	
 		}
@@ -599,17 +629,17 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 	//printf("Number is %d",(int)List_mng_status[mng_group][0]);
 	/*REPRODUCTION PARAMETERS*/
 	animal_node_pointer[current_akey]->num_births = age_indicator - 1 ;// assuming cows have claved every year
-	if(i<herd_size * replacement_prop *calv_3weeks)
+	if(i<herd_size * (1-replacement_prop) *calv_3weeks)
 	{
 		calving_date =  (int)today_date + rand()%21 + PSC ;
 	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
 	}
-	else if(i<herd_size * replacement_prop *calv_6weeks)
+	else if(i<herd_size * (1-replacement_prop) *calv_6weeks)
 	{
 		calving_date = (int)today_date + rand()%21 + 21 + PSC ;
 	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;	
 	}
-	else if(i<herd_size * replacement_prop *calv_9weeks)
+	else if(i<herd_size * (1-replacement_prop) *calv_9weeks)
 	{
 		calving_date = (int)today_date + rand()%21 + 42 + PSC ;
 	//	next_heat_date = calving_date + rand()%interval_first_heat + time_first_heat_min + rand()%interval_heat + interval_heat_min;
@@ -771,11 +801,11 @@ next_non_markov_date = ceil(today_date);
   	break;
   }
  // printf("updating markov date");
- printf("Before update");
+// printf("Before update");
   updated_date=update_markov_date(today_date,List_mng_status,cull_sell_rate,
   mortality, FarmGroupList,next_non_markov_date,
   num_culled,num_sold,num_death) ;
-printf("After update");
+//printf("After update");
 /*==============MARKOV DID NOT HAPPEN=====================================================================*/
   if (updated_date==next_non_markov_date) // this means markov event did not happen
      {//LOOP NM1
@@ -784,7 +814,7 @@ printf("After update");
      while(current_event!=NULL)
      {
      	//printf("event is not null\n") ;
-     	printf("Event is %d", current_event->event_type) ;
+     //	printf("Event is %d", current_event->event_type) ;
      	/*
     EVENT 1: Calving 2:Heat 3:Change in culling index
         4: Change in mortality index
@@ -896,10 +926,10 @@ printf("After update");
 	//	printf("Lact number is %d",(int)List_mng_status[id_lact_group][0]);
 	//	system("pause");
 	//	printf("setting up move date") ;
-		if(next_non_markov_date+91<sim_years*365)
+		if(next_non_markov_date+weaning_wks*7<sim_years*365)
 		{
-			add_event_node(event_day,next_non_markov_date+91, new_event) ;//animals move to the next age group
-		printf("Moving event is %d",next_non_markov_date+91);
+			add_event_node(event_day,next_non_markov_date+weaning_wks*7, new_event) ;//animals move to the next age group
+		printf("Moving event is %d",next_non_markov_date+weaning_wks*7);
 	
 		}
 	//	printf("last calf to add\n");
