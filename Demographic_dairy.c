@@ -40,11 +40,12 @@ int const id_bull_group = 6;
 #define calv_3weeks 0.6
 #define calv_6weeks 0.87
 #define calv_9weeks 0.98
-#define submission_prop 0.86
+#define submission_prop 0.9
 #define conception_AI 0.48
 #define conception_bull 0.55
 #define mating_week_AI 6
 #define mating_week_bull 4
+#define mating_period 10
 
 #define time_first_heat_min 10  // days until the first oestrus minimum value
 #define time_first_heat_max 49  // days until the first Oestrus maximum value
@@ -62,16 +63,18 @@ int const id_bull_group = 6;
 #define sim_years 3
 #define num_extra_animal_per_year 150
 
+#define column_cull_empty 1
+#define column_sell_empty 2
 /*Define tables imported*/
 int num_cull_sell_steps = 62 ; //62 steps for culling and death
 int num_mortality_steps = 19 ;
-int n_column_cull_sell_rate = 3; // days, cull_rate, sell_rate
+int n_column_cull_sell_rate = 5; // days, cull_rate_empty, sell_rate_empty,cull_rate,sell_rate
 int n_column_mortality_rate = 2; // day and mortality
 int n_column_List_mng_status = 2 ; //expand it later. Now total num of animals in each mng 
-int num_column_NumGrpAnimal = 3650;
+int num_column_NumGrpAnimal = 15000;
 int temp_num_animal;
 // and sum of rates in each mng, but later will include no.sus/exposed/infectious/latent
-char CullSellRatesFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/CullSellRatesFile.csv" ;
+char CullSellRatesFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/CullSellRatesFile2.csv" ;
 char MortalityFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/mortality.csv" ;
 char NumberAnimalDataFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/NumberAnimalDataFile.csv" ;
 /*Define general parameters*/
@@ -83,6 +86,9 @@ char NumberAnimalDataFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/
 
 /* Define heifer related parameters*/ 
 int first_heat_rand ;
+int pregnant_status;
+int target_calf_met = 0;
+int target_milk_met = 0;
 /* Define lactating and non-lactating related parameters*/
 //int num_total_groups = num_total_herd * (id_bull_group + 1) ; // gives the total number of groups
 
@@ -216,6 +222,7 @@ Set up linked list for the management group
 struct animal_node* FarmGroupList[id_bull_group+1];//Just a single pointer, if get confused, check F&Q why
 struct animal_node* current_animal;
 struct animal_node* next_animal;
+struct animal_node* previous_animal;
 
 struct event_node* event_day[sim_days];
 struct event_node* new_event ;
@@ -280,7 +287,7 @@ Add R1/R2/Dry to the linked list*/
 
 /*============ R1 HEIFER========================================================*/
 //adding R1 heifer
-for(i=0; i< herd_size * replacement_prop; i++ )
+for(i=0; i< herd_size * calf_keep_prop; i++ )
 {
 	mng_group = 1 ;
 	 //R1 heifers should be between 284 and 304 days old
@@ -303,7 +310,8 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	animal_node_pointer[current_akey]->next_node = NULL;
 	
 	markov_rate = 
-	cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+	cull_sell_rate[current_index_cull_sell][column_cull_empty]+
+	cull_sell_rate[current_index_cull_sell][column_sell_empty] + 
 	mortality[current_index_mortality][1] ;
 	//then mortality
 	List_mng_status[mng_group][1] = List_mng_status[mng_group][1] + markov_rate ;
@@ -355,7 +363,7 @@ printf("R1 added");
 
 	
 /*==================R2 HEIFER================================================================*/
-for(i=0; i< herd_size * replacement_prop; i++ )
+for(i=0; i< herd_size * calf_keep_prop; i++ )
 {
 	mng_group = 2 ;
 	current_age = 365+r1_initial_age-rand()%21;
@@ -380,7 +388,8 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	animal_node_pointer[current_akey]->index_cull_sell = current_index_cull_sell ;
 	animal_node_pointer[current_akey]->index_mortality = current_index_mortality ;
 	animal_node_pointer[current_akey]->group = mng_group ; //
-	animal_node_pointer[current_akey]->pregnant_status = 1;
+	pregnant_status = 1;
+	animal_node_pointer[current_akey]->pregnant_status = pregnant_status;
 	animal_node_pointer[current_akey]->num_births = 0 ;
 	animal_node_pointer[current_akey]->present = 1 ;
 	animal_node_pointer[current_akey]->previous_node = NULL;
@@ -389,7 +398,8 @@ for(i=0; i< herd_size * replacement_prop; i++ )
 	
 	
 	markov_rate = 
-	cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+	cull_sell_rate[current_index_cull_sell][column_cull_empty+2*pregnant_status]+
+	cull_sell_rate[current_index_cull_sell][column_sell_empty+2*pregnant_status] + 
 	mortality[current_index_mortality][1] ;
 	
 	
@@ -469,7 +479,8 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
 	animal_node_pointer[current_akey]->group = mng_group ;
 	animal_node_pointer[current_akey]->akey = current_akey;
-	animal_node_pointer[current_akey]->pregnant_status = 1;
+	pregnant_status = 1 ;
+	animal_node_pointer[current_akey]->pregnant_status = pregnant_status;
 	animal_node_pointer[current_akey]->present = 1 ;
 	animal_node_pointer[current_akey]->previous_node = NULL;
 	animal_node_pointer[current_akey]->next_node = NULL;
@@ -620,7 +631,8 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 		animal_node_pointer[current_akey]->index_mortality = current_index_mortality ;
 	//0 calf, 1 R1, 2 R2, 3 2yr, 4 3-5yr, 5 6-7yr, 6 8yr
 	markov_rate = 
-	cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+	cull_sell_rate[current_index_cull_sell][column_cull_empty+pregnant_status*2]+
+	cull_sell_rate[current_index_cull_sell][column_sell_empty+pregnant_status*2] + 
 	mortality[current_index_mortality][1] ;
 	animal_node_pointer[current_akey]->sum_markov_rate = markov_rate;
 	
@@ -688,7 +700,7 @@ for(i=0; i< herd_size * (1-replacement_prop); i++ )
 	current_akey ++;
 }
 /* ADDING INITIAL ANIMALS DONE*/
-printf("Dry is %d",(int)List_mng_status[id_dry_group][0]);
+//printf("Dry is %d",(int)List_mng_status[id_dry_group][0]);
 system("pause");
 /*ADD Dry-off event*/
 
@@ -710,23 +722,33 @@ int num_add_heat = 0;
 /*============================================================================================
 Day procedes
 =============================================================================================*/
-while(today_date<=sim_years*365)
+while(today_date<sim_days)
 {
 	year = (int)floor(today_date/365);
-	calendar_day = today_date - year*365 ;
-//	printf("today is %lf",today_date) ;
+
+	
+	printf("today is %lf\n",today_date) ;
+	
 	//visualize_list(event_day,0) ;
 /*====START OF DAY========================================================*/
 next_non_markov_date = ceil(today_date);
-
+//	if(next_non_markov_date==year*365)
+//	{printf("R1 is %d\n",(int)List_mng_status[1][0]);
+//	printf("R2 is %d\n",(int)List_mng_status[2][0]);
+//	system("pause");
+//	}
   while (event_day[next_non_markov_date] == NULL)
             {//loop2
 		    next_non_markov_date++; // go to the next day
+		    if(next_non_markov_date==sim_days)
+		    {
+		    	break;
+			}
 	 //   printf("Next non Markov is %d",next_non_markov_date) ;
 	 //here I need to cancel events that are associated with animals that are removed
 	 if(event_day[next_non_markov_date]!=NULL)
 	 {
-	 	printf("NonM is %d",next_non_markov_date);
+	 //	printf("NonM is %d",next_non_markov_date);
 	 	current_event = event_day[next_non_markov_date];
 	 	//trial
 	 	current_animal = current_event->animal; 	
@@ -794,22 +816,23 @@ next_non_markov_date = ceil(today_date);
 	 	
 	 }
             } // now get next non-markov date
-    printf("NonM is %d",next_non_markov_date);
+  //  printf("NonM is %d",next_non_markov_date);
   if(next_non_markov_date>=sim_days)
   {
   	printf("Break");
   	break;
   }
  // printf("updating markov date");
-// printf("Before update");
+ printf("Before update");
   updated_date=update_markov_date(today_date,List_mng_status,cull_sell_rate,
   mortality, FarmGroupList,next_non_markov_date,
   num_culled,num_sold,num_death) ;
-//printf("After update");
+printf("After update");
 /*==============MARKOV DID NOT HAPPEN=====================================================================*/
   if (updated_date==next_non_markov_date) // this means markov event did not happen
      {//LOOP NM1
-	printf("Loop started\n");
+     calendar_day = next_non_markov_date - year*365 ;
+	//printf("Loop started\n");
      current_event = event_day[next_non_markov_date];
      while(current_event!=NULL)
      {
@@ -827,7 +850,7 @@ next_non_markov_date = ceil(today_date);
 		The end of the day! 
      	*/
     /*======== CALVING==========================================*/
-     	if(current_event->event_type==1)
+     	if(current_event->event_type==1 && target_milk_met ==0 && current_event->animal->present==1)
      	{
      		
 		    current_animal = current_event->animal ;
@@ -837,16 +860,17 @@ next_non_markov_date = ceil(today_date);
 		    	system("pause");
 			}
      		current_grp = current_animal->group ;
-     		printf("akey is %lld",current_animal->akey);
+     		
      //		printf("event is %d\n",current_event->event_type);
      		if(current_grp==4)
      		{
-     			printf("Dry cow is %d\n",(int)List_mng_status[id_dry_group][0]);
-     			dry_calved++;
+     		//	printf("Dry cow is %d\n",(int)List_mng_status[id_dry_group][0]);
+     		//	dry_calved++;
 			 }
 			 if(current_animal->present == 0)
 			 {
 			 	printf("wait! Ghost cow calving!");
+			 	printf("akey is %lld and grp is %d",current_animal->akey, current_animal->group);
 			 		system("pause");
 			 
 			 }
@@ -856,11 +880,11 @@ next_non_markov_date = ceil(today_date);
      		//if heifer -1 from heifer, if adult -1 from dry
      
      		List_mng_status[current_grp][0]--;
-     			if(current_grp==4)
-     		{
-     			printf("Dry cow is %d\n",(int)List_mng_status[id_dry_group][0]);
-     		}
-     		printf("Dry calved cow is %d\n",dry_calved);
+     	//		if(current_grp==4)
+     	//	{
+     	//		printf("Dry cow is %d\n",(int)List_mng_status[id_dry_group][0]);
+     	//	}
+     	//	printf("Dry calved cow is %d\n",dry_calved);
      		if(List_mng_status[current_grp][0]<0)
      		{
      			printf("Warning! Number gets below 0 in group %d",current_grp);
@@ -868,9 +892,15 @@ next_non_markov_date = ceil(today_date);
 			 }
      		
      		List_mng_status[id_lact_group][0]++;//whgether they are heifer or adult, goes to lact
-     		current_animal->pregnant_status = 0;
-     		
-     		remove_animal_group(FarmGroupList,current_grp,current_animal);
+     		//remove R2 if there are 400 calved
+		
+		 	current_animal->pregnant_status = 0;
+     		current_animal->sum_markov_rate = 
+					cull_sell_rate[current_animal->index_cull_sell][column_cull_empty+2*pregnant_status]+
+					cull_sell_rate[current_animal->index_cull_sell][column_sell_empty+2*pregnant_status] + 
+					mortality[current_animal->index_mortality][1] ;
+     	
+		 	remove_animal_group(FarmGroupList,current_grp,current_animal);
      		current_animal->group = id_lact_group ; //change the group
      		add_animal_group(FarmGroupList,id_lact_group,current_animal);
      		/*ADd First heat event*/
@@ -912,12 +942,18 @@ next_non_markov_date = ceil(today_date);
 		next_cull_change_date = next_non_markov_date+cull_sell_rate[1][0] ;
 		next_mortality_change_date = next_non_markov_date+mortality[1][0] ;	
 		List_mng_status[id_calf_group][0]++;
+		if(List_mng_status[0][0]==1)
+		{
+			printf("The first calving date is %d in YEAR %d\n",calendar_day, year);
+			system("pause");
+		}
 	//	printf("Calf size is %lf\n",List_mng_status[0][0]);
 		//if this is the last animal to be kept
-		if(List_mng_status[0][0]==herd_size * calf_keep_prop)
+		if(List_mng_status[0][0]==herd_size * calf_keep_prop && target_calf_met==0)
 		{
-		printf("Target calf number %d secured Day %d\n",(int)List_mng_status[0][0],next_non_markov_date);
-		printf("Calendar is %d", calendar_day);
+		target_calf_met = 1;
+		printf("Target calf secured %d in YEAR %d\n",calendar_day, year);
+	//	printf("Calendar is %d", calendar_day);
 		system("pause")	;
 		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 		new_event->event_type = 8; //moving to the next group
@@ -935,12 +971,25 @@ next_non_markov_date = ceil(today_date);
 	//	printf("last calf to add\n");
 		}
 		markov_rate = 
-		cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+		cull_sell_rate[current_index_cull_sell][1]+
+		cull_sell_rate[current_index_cull_sell][2] + 
 		mortality[current_index_mortality][1] ;
 		animal_node_pointer[current_akey]->sum_markov_rate = markov_rate ;
 		//List_mng_status[0][1] = List_mng_status[0][1] + markov_rate ;
 	
 		add_animal_group(FarmGroupList,0, animal_node_pointer[current_akey]) ;
+		
+		/*ADD FIRST HEAT ASSUMING 12MO*/
+		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+		new_event->event_type = 2;
+		first_heat_rand = rand()%heifer_puberty_error+heifer_puberty;
+		new_event->akey = current_akey;
+		new_event->animal = animal_node_pointer[current_akey]; //let's see if this works
+		new_event->next_node = NULL ;
+			if((first_heat_rand+next_non_markov_date)<sim_years*365)
+		{
+			add_event_node(event_day,first_heat_rand+next_non_markov_date, new_event) ;
+		}
 		
 		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
 		new_event->event_type = 3;//change in culling index
@@ -963,13 +1012,78 @@ next_non_markov_date = ceil(today_date);
 			add_event_node(event_day,next_mortality_change_date, new_event) ;
 		}
 		
+	
 		current_akey++;
 		 }
+		 //remove all R2 when the calved cows reached 400
+		 	if(List_mng_status[id_lact_group][0]==herd_size)
+     		{
+     			printf("Day is %d",calendar_day);
+     			//remove all R2 if remaining
+     			if(List_mng_status[id_r2_group][0]<=0)
+     			{
+     				printf("No R2 animals remained\n");
+				 }
+				 else
+				 {
+				 	printf("R2 is %d",(int)List_mng_status[id_r2_group][0]);
+				 	current_animal = FarmGroupList[id_r2_group];
+				 	while(current_animal!=NULL)
+				 	{
+				 		current_animal->present = 0;
+				 		previous_animal = current_animal;
+				 		current_animal = current_animal->next_node;
+				 		remove_animal_group(FarmGroupList,id_r2_group,previous_animal);
+				 		List_mng_status[id_r2_group][0]--;
+				 		(*num_culled)++;
+				 		
+					 }
+				 }
+				
+				if(List_mng_status[id_dry_group][0]<=0)
+     			{
+     				printf("No Dry animals remained");
+				 }
+				 else
+				 {
+				 	printf("Dry is %d",(int)List_mng_status[id_dry_group][0]);
+				 	current_animal = FarmGroupList[id_dry_group];
+				 	while(current_animal!=NULL)
+				 	{
+				 	//	printf("akey is %lld\n", current_animal->akey);
+				 	//	if(current_animal->next_node==NULL)
+				 	//	{
+				 	//		printf("next node NULL");
+					//	 }
+					//	 else
+					//	 {
+					//	 	printf("next akey is %lld\n",current_animal->next_node->akey);
+					//	 }
+				 		current_animal->present = 0;
+				 		previous_animal = current_animal;
+				 		current_animal = current_animal->next_node;
+				 		//printf("now akey is %lld",current_animal->akey);
+				 		List_mng_status[id_dry_group][0]--;
+				 		(*num_culled)++;
+				 	
+				 		remove_animal_group(FarmGroupList,id_dry_group,previous_animal);
+				 		
+				 		
+					 }
+				//	 if(FarmGroupList[id_dry_group]==NULL)
+				//	 {
+				//	 	printf("Now all dry animals gone\n");
+				//	 }
+				 }
+				 target_milk_met = 1 ;
+				 printf("Target milking reached\n");
+			//	 system("pause");
+			 }
      	
 		 } //calving done
 		 	
 	/*=============HEAT============================================*/
-		 if(current_event->event_type==2)
+		 if(current_event->event_type==2 && calendar_day<=PSM+7*mating_period&& current_event->animal->present==1)
 		 {
 	//	 	printf("event is %d\n",current_event->event_type);
 		 	//Heat
@@ -1004,7 +1118,11 @@ next_non_markov_date = ceil(today_date);
 		 			if((double)rand()/(double)RAND_MAX <= conception_rate)
 					 {
 					 	current_animal->pregnant_status = 1 ;
-					 	
+					 	current_animal->sum_markov_rate = 
+						cull_sell_rate[current_animal->index_cull_sell][column_cull_empty+2*pregnant_status]+
+						cull_sell_rate[current_animal->index_cull_sell][column_sell_empty+2*pregnant_status] + 
+						mortality[current_animal->index_mortality][1] ;
+						
 					 //	printf("animal pregnant");
 					 //	system("pause");
 					 	//add calving event
@@ -1040,11 +1158,12 @@ next_non_markov_date = ceil(today_date);
 				 }
 			 }
 	/*===============CHANGE IN CULLING INDEX===========================*/
-	if(current_event->event_type==3)
+	if(current_event->event_type==3&& current_event->animal->present==1)
 		 {
 	//	 	printf("event is %d\n",current_event->event_type);
 		 	current_animal = current_event->animal;
 		  current_index_cull_sell = current_animal->index_cull_sell;	
+		  pregnant_status = current_animal->pregnant_status;
 		// printf("index is %d\n",current_index_cull_sell);
 		 //now if it does not exceed the limit
 		 if(current_index_cull_sell<=60)
@@ -1059,7 +1178,8 @@ next_non_markov_date = ceil(today_date);
 		current_index_mortality = current_animal->index_mortality;
 		 //then re-calculate sum again		
 		current_animal->sum_markov_rate = 
-		cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+		cull_sell_rate[current_index_cull_sell][column_cull_empty+2*pregnant_status]+
+		cull_sell_rate[current_index_cull_sell][column_sell_empty+2*pregnant_status] + 
 		mortality[current_index_mortality][1] ;
 	//	printf("index updated");
 	//then have to add next change date
@@ -1085,12 +1205,12 @@ next_non_markov_date = ceil(today_date);
 			}
 	     }
 	/*===============CHANGE IN MORTALITY INDEX===========================*/
-	if(current_event->event_type==4)
+	if(current_event->event_type==4 && current_event->animal->present==1)
 		 {
 	//	 printf("event is %d\n",current_event->event_type);	
 		 current_animal = current_event->animal;
 		 current_index_mortality =current_animal->index_mortality;
-		 
+		 pregnant_status = current_animal->pregnant_status;
 		 //now if it does not exceed the limit
 		 if(current_index_mortality<=17)
 		 {
@@ -1104,7 +1224,8 @@ next_non_markov_date = ceil(today_date);
 		current_index_cull_sell = current_animal->index_cull_sell;
 		 //then re-calculate sum again		
 	current_animal->sum_markov_rate = 
-		cull_sell_rate[current_index_cull_sell][1]+cull_sell_rate[current_index_cull_sell][2] + 
+		cull_sell_rate[current_index_cull_sell][column_cull_empty+2*pregnant_status]+
+		cull_sell_rate[current_index_cull_sell][column_sell_empty+2*pregnant_status] + 
 		mortality[current_index_mortality][1] ;	
 		//mortality
 	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
@@ -1114,13 +1235,13 @@ next_non_markov_date = ceil(today_date);
 	new_event->next_node = NULL ;
 		if(current_index_mortality<=17)
 		 {
-		 	printf("index is %d",current_index_mortality);
+		 //	printf("index is %d",current_index_mortality);
 		 next_mortality_change_date = next_non_markov_date+
 		 mortality[current_index_mortality+1][0] - cull_sell_rate[current_index_mortality][0] ;
 		 }
 		  else
 	     {
-	     	printf("index is %d",current_index_mortality);
+	     //	printf("index is %d",current_index_mortality);
 	     	next_mortality_change_date = next_non_markov_date+cull_sell_rate[16][0]+365-
 			cull_sell_rate[current_index_mortality][0]  ;
 		 }
@@ -1135,35 +1256,41 @@ next_non_markov_date = ceil(today_date);
 	/*===========Move to next subgroup========================================*/
 	if(current_event->event_type==8)
 	{
-		printf("Moving Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
-			printf("Now Lact is %d",(int)List_mng_status[id_lact_group][0]);
-			system("pause");
+		target_calf_met=0;
+		target_milk_met=0;
+	//	printf("Moving Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
+	//		printf("Now Lact is %d",(int)List_mng_status[id_lact_group][0]);
+	//		system("pause");
 	//	printf("event is %d\n",current_event->event_type);
 		if(FarmGroupList[2]!=NULL)
 		{
 			current_animal = FarmGroupList[2];
-			printf("There are still animals in R2! Day is %d\n",next_non_markov_date) ;
-			
+		//	printf("There are still animals in R2! Day is %d\n",next_non_markov_date) ;
+		//	system("pause");
 			//these animals will be culled
 			
 			while(current_animal!=NULL)
 			{
 				next_animal = current_animal->next_node;
+		//		if(current_animal->pregnant_status==0)
+		//		{
+		//			printf("This heifer empty\n");
+		//		}
 				remove_animal_group(FarmGroupList,id_r2_group,current_animal);
 				current_animal->present = 0;
 				List_mng_status[id_r2_group][0]--;
 				(*num_culled)++;
 				current_animal = next_animal ;
 			}
-			printf("Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
-			system("pause");
+		//	printf("Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
+	//		system("pause");
 			FarmGroupList[2] = NULL;
 		}
-		if(FarmGroupList[1]==NULL)
-		{
-			printf("There is no animals in R1!\n");
-		}
-		else
+	//	if(FarmGroupList[1]==NULL)
+	//	{
+	//		printf("There is no animals in R1!\n");
+	//	}
+		if(FarmGroupList[2]==NULL) //now if R2 becomes 0
 		{//
 		
 			current_animal = FarmGroupList[1] ;
@@ -1177,17 +1304,19 @@ next_non_markov_date = ceil(today_date);
 			FarmGroupList[1] = NULL;
 			temp_num_animal = List_mng_status[1][0]; //R1 heifers
 			List_mng_status[2][0] = temp_num_animal;
-			printf("R2 heifer is %d",temp_num_animal);
+	//		printf("R2 heifer is %d",temp_num_animal);
 			
 			if(FarmGroupList[0]==NULL)
 			{
 				printf("There is no animals in calf:YEAR %d\n",year) ;
+				system("pause");
 			}
 			else
 			{
 				if(List_mng_status[0][0]<=0)
 				{
 					printf("FarmGroupList has calves but not in List_mng");
+					system("pause");
 				}
 				else
 				{
@@ -1217,8 +1346,8 @@ next_non_markov_date = ceil(today_date);
 	int num_dry = 0;
 	int num_culled_nonpregnant = 0;
 	int num_pregnant_at_dry = 0;
-	printf("pregnant is %d submission is %d heat is %d adding heat is %d",num_pregnant,num_submission,num_heat,num_add_heat);
-	system("pause");
+	//printf("pregnant is %d submission is %d heat is %d adding heat is %d",num_pregnant,num_submission,num_heat,num_add_heat);
+	//system("pause");
 	//	printf("event is %d\n",current_event->event_type);
 		if(FarmGroupList[id_lact_group]==NULL)
 		{
@@ -1230,7 +1359,15 @@ next_non_markov_date = ceil(today_date);
 			if(FarmGroupList[id_dry_group]!=NULL)
 			{
 				printf("There are already dry animals!\n") ;
-				system("pause");
+			//	printf("num is %d",List_mng_status[id_dry_group][0]);
+				//next_animal = FarmGroupList[id_dry_group];
+				//while(next_animal!=NULL)
+				//{
+				//	printf("Akey and grp is %lld, %d status %d\n",next_animal->akey,next_animal->group,next_animal->pregnant_status);
+				//	printf("Present is %d",next_animal->present);
+				//	next_animal = next_animal->next_node;
+				//}
+				//system("pause");
 			}
 			else
 			{
@@ -1241,15 +1378,17 @@ next_non_markov_date = ceil(today_date);
 					next_animal = current_animal->next_node;
 					if(current_animal->pregnant_status==0)//if not pregnant
 					{
-						printf("akey is %lld",current_animal->akey);
+					//	printf("akey is %lld",current_animal->akey);
 						remove_animal_group(FarmGroupList,id_lact_group,current_animal);
 						current_animal->present = 0 ;
 						(*num_culled)++;
 						num_culled_nonpregnant++;
-						printf("Non-pregnant culled");
+					//	printf("Non-pregnant culled");
 					//	system("pause");
+					//-1 this group because we need number of remaining lact animals
 						List_mng_status[id_lact_group][0]--;
 					}
+					
 					current_animal = next_animal ;
 					num_lact++;
 				}
@@ -1260,8 +1399,9 @@ next_non_markov_date = ceil(today_date);
 					num_dry++;
 					current_animal = current_animal->next_node ;
 				}
-				printf("Lact was %d, Dry is %d Cull is %d",num_lact, num_dry,num_culled_nonpregnant);
-				system("pause");
+			//	printf("Lact was %d, Dry is %d Cull is %d total cull is %d\n",num_lact, num_dry,num_culled_nonpregnant,*num_culled);
+			//	printf("Death is %d Sale is %d\n",*num_death,*num_sold);
+			//	system("pause");
 				FarmGroupList[id_lact_group]=NULL;
 				temp_num_animal = List_mng_status[id_lact_group][0];
 				List_mng_status[id_lact_group][0]=0;
@@ -1308,6 +1448,7 @@ next_non_markov_date = ceil(today_date);
 	NumGrpAnimal[i+1][index_column] = (int)List_mng_status[i][0] ;
 	}
 	index_column++;	
+	printf("index column is %d\n",index_column);
 //	printf("index updated %d",index_column) ;
  	} //LOOP NM1
 	today_date = updated_date;
@@ -1443,10 +1584,11 @@ int* num_culled, int* num_sold, int* num_death)
 	int random_int;
 	int i,j;
 	int k = 0;
+	int pregnant_status ;
 	//Calculate MARKOV Date
 	for(i=0; i<id_bull_group+1; i++)
 	{//for each management group
-	printf("Management grp is %d",i);
+	//printf("Management grp is %d",i);
 	
 	current_animal = FarmGroupList[i] ;
 	List_mng_status[i][1] = 0; //reset
@@ -1465,7 +1607,7 @@ int* num_culled, int* num_sold, int* num_death)
 	}
 //	printf("Group %d is done",i) ;
 	sum_rate = 	sum_rate + List_mng_status[i][1] ;
-//	printf("sum is %lf",sum_rate);
+	printf("sum is %lf\n",sum_rate);
 	}
 //printf("sum rate is %lf",sum_rate);
 //Now calculate a waiting time
@@ -1477,15 +1619,15 @@ int* num_culled, int* num_sold, int* num_death)
      	printf("Error: markov date cannot be negative!") ;
      	system("pause") ;
 	 }
-	 printf("markov date is %lf",day_to_markov);
-	 printf("non markov is %d",next_non_markov_date);
+	// printf("markov date is %lf",day_to_markov);
+//	 printf("non markov is %d",next_non_markov_date);
 /* NOW ASSESS WHETHER MARKOV EVENT OCCURS FIRST OR NOT*/
 	if (next_non_markov_date>day_to_markov+today_date)
 	{ // if markov comes first, choose markov events 
 	   k++;
 	   //printf("This is %d th markov",k);
 	   today_date = day_to_markov+today_date ;
-	   printf("ceil days is %lf",today_date);
+	  // printf("ceil days is %lf",today_date);
 	   //system("pause");
 	  
 	random_value =  (double)(rand()+1)/(double)(RAND_MAX+1)*sum_rate;
@@ -1495,9 +1637,9 @@ int* num_culled, int* num_sold, int* num_death)
 	{
 		accumu_rate = accumu_rate+ List_mng_status[i][1] ;
 		i++;
-		printf("i is %d\n", i) ;
+		//printf("i is %d\n", i) ;
 	} //i is the group at which an event occurs	
-	printf("group decided");
+	//printf("group decided");
 	random_value = ((double)(rand()+1)/(double)(RAND_MAX+1))* List_mng_status[i-1][1];
 	//now decides which animal is going to have an event
 	accumu_rate = 0; //reset accumulate, this time use this for sum of rate over animals
@@ -1527,36 +1669,42 @@ int* num_culled, int* num_sold, int* num_death)
 		//current_animal is the animal that will have an event
 	//Choose event
 	random_value = (double)(rand()+1)/(double)(RAND_MAX+1)* (current_animal->sum_markov_rate);
+	//printf("random value is %lf\n",random_value);
+	//printf("cull rate is %lf\n",cull_sell_rate[current_animal->index_cull_sell][1+2*(current_animal->pregnant_status)]);
+	//printf("sale rate is %lf\n",cull_sell_rate[current_animal->index_cull_sell][2+2*(current_animal->pregnant_status)]);
+	//printf("death is %lf\n",mortality[current_animal->index_mortality][1]);
+	//system("pause");
 	//obtain rates for culling, death and sale
-	if(random_value<=cull_sell_rate[current_animal->index_cull_sell][1])
+	if(random_value<=cull_sell_rate[current_animal->index_cull_sell][1+2*(current_animal->pregnant_status)])
 	{
 		//cull
 		(*num_culled)++;
-	//	printf("this is cull");
-	//	system("pause");
+		printf("this is cull");
+		//system("pause");
 	}
-	else if(random_value<=cull_sell_rate[current_animal->index_cull_sell][1]+cull_sell_rate[current_animal->index_cull_sell][2])
+	else if(random_value<=(cull_sell_rate[current_animal->index_cull_sell][1+2*(current_animal->pregnant_status)]+cull_sell_rate[current_animal->index_cull_sell][1+2*(current_animal->pregnant_status)]))
 	{
 		//sale
 		(*num_sold)++;
-		//printf("this is sold");
-	//	system("pause");
+		printf("this is sold");
+		//system("pause");
 	}
 	else
 	{
 		//death
-		(*num_death++);
-	//	printf("this is death");
-	//	system("pause");
+		(*num_death)++;
+		printf("this is death");
+		//system("pause");
 		
 	}
-	printf("i is %d",i);
+	//printf("i is %d",i);
 	List_mng_status[i-1][0]--;
 	if(List_mng_status[i-1][0]<0)
 	{
 		printf("Warning! Animals below 0");
+		system("pause");
 	}
-//	printf("event decided");
+	printf("event decided");
 	/*==========remove this animal=====================================*/
 	if (current_animal -> previous_node != NULL)
 	{ 
@@ -1572,12 +1720,12 @@ int* num_culled, int* num_sold, int* num_death)
                 next_animal = current_animal -> next_node ; // get the next animal
                 prev_animal -> next_node = next_animal;    // reconenct previous_animal's next node
                 next_animal -> previous_node = prev_animal;//similarly reconnect next_animal's previous node
-		           printf("B ends");
+		           //printf("B ends");
 				}	
 		else // if next node is null
 		        {//Removal Situation B
 		   	    prev_animal -> next_node = NULL ;
-		   	    printf("A ends");
+		   	    //printf("A ends");
 		        }
 		    //      
 	}
@@ -1592,13 +1740,13 @@ else // if previous node is null
      //   printf("next animal akey is %lld",next_animal->akey) ;
         next_animal -> previous_node = NULL;
         FarmGroupList[i-1] = next_animal;
-        printf("D ends") ;
+       // printf("D ends") ;
 		}
 		else 
 		{//Situation A
 	//		printf("E starts") ;
 		FarmGroupList[i-1] = NULL ; 
-		printf("C ends");
+	//	printf("C ends");
 		}
 		         
 	}
@@ -1636,17 +1784,19 @@ void read_cull_sell_rate(char CullSellRatesFile[], double **cull_sell_rate, int 
        
     /* DECLARE STORAGE VARIABLES */
     int line_num, day;
-    double cull_rate, sale_rate;
+    double cull_rate_empty, sale_rate_empty,cull_rate,sale_rate;
     
     /* READ LINES OF FARM FILE */
     for(line_num = 0; line_num < num_cull_sell_steps; line_num++)
       { 
-         fscanf(temp, "%d,%lf,%lf",&day, &cull_rate, &sale_rate);
+         fscanf(temp, "%d,%lf,%lf,%lf,%lf",&day, &cull_rate_empty, &sale_rate_empty, &cull_rate,&sale_rate);
          
              cull_sell_rate[line_num][0] = day;
              //printf("day is %d",day) ;
-             cull_sell_rate[line_num][1] = cull_rate/1000;
-             cull_sell_rate[line_num][2] = sale_rate/1000;
+             cull_sell_rate[line_num][1] = cull_rate_empty/1000;
+             cull_sell_rate[line_num][2] = sale_rate_empty/1000;
+             cull_sell_rate[line_num][3] = cull_rate/1000;
+             cull_sell_rate[line_num][4] = sale_rate/1000;
       }
       fclose(temp);
 }
@@ -1704,7 +1854,7 @@ void visualize_list(struct event_node *event_day[], int day)
           {
           //	if (current_node1->des_pro_id==(1225*3+2)||current_node1->src_pro_id==(1225*3+2))
            //   {
-			 printf("Event is %d", current_node1 -> event_type);
+			// printf("Event is %d", current_node1 -> event_type);
 			 // system("pause") ;
 		   // }
               
