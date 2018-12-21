@@ -62,7 +62,7 @@ int const id_bull_group = 6;
 //#define R2_mortality 0.017
 //#define mixed_mortality 0.017
 #define weaning_wks 10 
-#define sim_years 3
+#define sim_years 10
 #define num_extra_animal_per_year 120
 
 #define column_cull_empty 1
