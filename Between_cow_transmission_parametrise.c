@@ -4,6 +4,46 @@ Mycoplasma project
 2. Starting date June 1
 =============================================================*/
 
+
+/*===Parameters to receive from R=========*/
+//int herd_size;
+int risk_date;
+double Se and Sp;
+
+int nrow_testschedule = 395; 
+double bv_r1 = 1/21.0;
+double bv_r2 = 1/15.0;
+double bv_r3 = 1/45.0;
+double bv_r4 = 1/100.0;
+double Se_Bio = 0.4 ;
+double Sp_Bio = 0.95 ;
+double Se_ID = 0.8 ;
+double Sp_ID = 0.95 ;
+double PCR_live = 0.9;
+double PCR_slaughter = 0.95;
+#define herd_size 400
+//#define mastitis_recovery_date 17
+/*PARAMETER TO ESTIMATE*/
+//S,E,I(clinical+shed),I(clinical+noshed),I(nonclinical+shed),I(nonclinical+noshed),R
+// r1: rate from E to Isub
+// r2: rate from Isub to Icli
+// r3: rate from Icli to Isub 
+// r4: rate from Isub to E
+double bv_r1_min = 1/21.0 ;//minimum r1
+double bv_r1_max = 1/1.0; //maximum r1
+double bv_r2_min = 1/15.0; 
+double bv_r2_max = 1/4.0 ;
+double bv_r3_min = 1/60.0;
+double bv_r3_max = 1/30.0;
+double bv_r4_min = 1/15.0;
+double bv_r4_max = 1/365.0 ;
+
+
+double bv_f = 0.05 ; //scale factor of subclinical shedding compared to clinical
+double beta_mm = 0.02  ; //from cow to cow
+double beta_mc = 0.01; //from milkers to calves
+double rate_sero_conversion = 1/21; //mode 21 days 
+
 /*==================================================================
 DEFINE PARAMETER & STRUCTURE
 ===================================================================*/
@@ -19,32 +59,33 @@ DEFINE PARAMETER & STRUCTURE
 
 /* Define variables*/
 /*Variables that can change according to the start date*/
-#define PSC 62 //Planned start of calving, set as 1 August which is 62 days
-#define PSM 144 //Planned start of mating, set as 22 October
-int dry_day = 334; //May 1st
+#define PSC 45 //Planned start of calving, set as 15 July which is 45 days
+#define PSM 127 //Planned start of mating, set as 07 October 12 weeks from PSC
+int dry_day = 364; //May 31st
 int r1_initial_age = 304; //As of June 1st, they are max 304 days old
 
 /*Other parameters*/
-#define herd_size 400
+
 #define num_total_herd 1
 #define id_calf_group 0
-#define id_r1_group 1
-#define id_r2_group 2
-#define id_lact_group 3
-#define id_dry_group 4
-#define id_sick_group 5
-int const id_bull_group = 6;
+#define id_calf_weaned 1
+#define id_r1_group 2
+#define id_r2_group 3
+#define id_lact_group 4
+#define id_dry_group 5
+#define id_sick_group 6
+int const id_bull_group = 7;
 #define calf_female_prop 0.5
 #define calf_keep_prop 0.3
 #define replacement_prop 0.22
-#define calv_3weeks 0.6
-#define calv_6weeks 0.87
+#define calv_3weeks 0.6 //around 60%
+#define calv_6weeks 0.87 //can be lower between 73% to 88%
 #define calv_9weeks 0.98
 #define submission_prop 0.9
 #define conception_AI 0.48
 #define conception_bull 0.55
-#define mating_week_AI 6
-#define mating_week_bull 4
+#define mating_week_AI 6 //can be 5 weeks accroding to Melvin
+#define mating_week_bull 4 //can be 7 weeks according to Melvin
 #define mating_period 10
 #define scanning 272
 #define test_date1 100
@@ -54,7 +95,7 @@ int const id_bull_group = 6;
 #define withhold_colostrum 5 //days
 #define calf_milk_consumption 4 //litres
 #define av_milk_production 15 //litre per day
-
+#define bobby_pickup 4 //every 4 day bobby gets picked up
 #define time_first_heat_min 10  // days until the first oestrus minimum value
 #define time_first_heat_max 49  // days until the first Oestrus maximum value
 #define interval_heat_min 18  // interval between oestrus events minimum
@@ -86,6 +127,8 @@ int temp_num_animal;
 char CullSellRatesFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/CullSellRatesFile2.csv" ;
 char MortalityFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/mortality.csv" ;
 char NumberAnimalDataFile[] = "E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/NumberAnimalDataFile.csv" ;
+char TestScheduleFile[] = 'E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/TestSchedule.csv';
+char TestResultFile[] = 'E:/ARATA/Documents/Research/Massey/Postdc_Massey/MBOVIS/Model/TestResultFile.csv' ;
 /*Define general parameters*/
 
 
@@ -118,7 +161,7 @@ int num_age_cat = 10 ;//0,1,2,3,4,5,6,7,8,9 and just repeat 9yrs rate
 
 /* Define simulation related parameters*/
 int sim_days = sim_years*365;
-int length_animal_pointer = herd_size*2 + num_extra_animal_per_year*sim_years ;
+int test_freq, last_test_date;
 
 //remtaining will give a birth between 63 (9weeks) and 70 (10weeks)
 
@@ -163,6 +206,28 @@ int num_bovis_status = 5 ; //need to modify?
 #define column_cli_NC 7//N cows clinically shedding in non colostrum, non detected
 #define column_cli_D 8 //N cows clinically shedding detected CM
 
+
+/*Column for TestSchedule*/
+int herd_id ;
+#define test_date 1
+#define slaughter_pcr_nomilk_calf 2
+#define slaughter_elisa_calf 3
+#define live_pcr_nomilk_calf 4
+#define live_elisa_calf 5
+#define slaughter_pcr_nomilk_adult 6
+#define slaughter_elisa_adult 7
+#define live_pcr_nomilk_adult 8
+#define live_elisa_adult 9
+#define live_pcr_milk 10
+#define btank 11
+#define bdiscard 12
+#define elisa_type 13
+
+
+#define test_pcr_live_nomilk 3
+#define test_pcr_slaughter_nomilk 4
+#define test_pcr_milk 5
+
 /*Parameters associated with mastitis or other conditions being detected*/
 /*This is nuisance parameter - don't want to estimate, shall I just predefine with no stochasticity?*/
 #define rate_detect_clinical_mastitis 0.95
@@ -179,34 +244,10 @@ int num_bovis_status = 5 ; //need to modify?
 #define rate_CM_8 0.047 //all rate /cow-day
 ///using these values, create a table of CM rate
 
-//#define mastitis_recovery_date 17
-/*PARAMETER TO ESTIMATE*/
-//S,E,I(clinical+shed),I(clinical+noshed),I(nonclinical+shed),I(nonclinical+noshed),R
-// r1: rate from E to Isub
-// r2: rate from Isub to Icli
-// r3: rate from Icli to Isub 
-// r4: rate from Isub to E
-double bv_r1_min = 1/21.0 ;//minimum r1
-double bv_r1_max = 1/1.0; //maximum r1
-double bv_r2_min = 1/15.0; 
-double bv_r2_max = 1/4.0 ;
-double bv_r3_min = 1/60.0;
-double bv_r3_max = 1/30.0;
-double bv_r4_min = 1/15.0;
-double bv_r4_max = 1/365.0 ;
 
-double bv_p1 = 0.05 ;//proportion of exposed that move to I (subclinical)
-double bv_p2 = 1 ; //proportion of I (subclinical) that move to I (clinical)
-double bv_f = 0.05 ; //scale factor of subclinical shedding compared to clinical
-double beta_mm  ; //from cow to cow
-double beta_mc ; //from milkers to calves
 
-double ab_detection_dilution = 0.3 ; //how much can the milk samples be diluted to detect AB? 3 +ve out of 10
-double Se_sero ;
-double Sp_sero ;
-double Se_milk ;
-double Sp_milk ;
-double rate_sero_conversion ; //mode 21 days 
+
+
 
 /* STRUCTURE DECLARATIONS */  
 struct animal_node {
@@ -269,6 +310,10 @@ int write_number_animals() ;
 double update_markov_date() ;
 void remove_animal_group() ;
 void visualize_list() ;
+void read_testschedule();
+int test() ;
+int test_bulk();
+int write_test_result() ;
 /*Setup vector*/
 
 
@@ -292,6 +337,10 @@ int* num_death ;
 int var_cull = 0;
 int var_sold = 0;
 int var_death = 0;
+int last_pick_up = 0;
+
+int* num_bobby;
+int var_bobby = 0;
 
 double markov_rate ;
 int index_column = 0;
@@ -299,11 +348,38 @@ int i, j, abc;
 int calving_date, next_heat_date ;
 int next_non_markov_date = 0;
 double updated_date ;
+
+
+/*=====Variable related to testing========================*/
+int counter_slaughter_pcr_nomilk ;
+int counter_slaughter_pcr_milk ;
+int counter_slaughter_ELISA ;
+
+int counter_live_pcr_nomilk;
+int counter_live_pcr_milk ;
+int counter_live_ELISA ;
+
+int target_slaughter_calf;
+int target_live_calf;
+int target_slaughter_adult;
+int target_live_adult;
+int target_adult;
+int slaughter, live, group ;
+
+int N_PPS, N_H, counter_slaughter, counter_live; 
+int counter_interval_sick, counter_interval_healthy;
+int sampling_interval_sick, sampling_interval_healthy ;
+
+
+int ncol_testschedule = 14;
+int ncol_test_table = 10 ;//check 10 columns 
+int shedder,total ;
+
 /*===============================================================================*/
 /*Main starts from here*/
 int main(void){
 	
-	
+int length_animal_pointer = herd_size*2 + num_extra_animal_per_year*sim_years ;	
 srand((unsigned)time(NULL));
 int current_akey = 0 ;
 double today_date = 0 ;
@@ -311,20 +387,27 @@ int mbovis_status ;
 int year = 0;
 int calendar_day = 0;
 int parity = 0;
+int first_bobby_born = 0;
+int id_lact_group2 = id_lact_group;
 num_culled = &var_cull;
 num_sold = &var_sold;
 num_death = &var_death;
+num_bobby = &var_bobby;
 struct animal_node* fake_animal;
 fake_animal = (struct animal_node*)malloc(sizeof( struct animal_node ));
 
 printf("Starts");	
 double** List_mng_status =  (double**)malloc( sizeof(double *) *id_bull_group); //modify if more than one herd exists	
-struct animal_node **animal_node_pointer = malloc( sizeof(struct animal_node*) * length_animal_pointer);
+
 double **cull_sell_rate = (double**)malloc( sizeof(double *) *num_cull_sell_steps );
 double **mortality = (double**)malloc( sizeof(double *) *num_mortality_steps );
 double **NumGrpAnimal = (double**)malloc( sizeof(double *) *(id_bull_group+2) );
 double **table_CM_rate = (double**)malloc(sizeof(double*)*8);// 0-7 parity
 int *milk_numbers = (double*)malloc(sizeof(double)*(column_cli_D+1)) ; //table for milk
+int** GroupSampleSize = (int**)malloc(sizeof(int*)*(id_dry_group+1)) ;
+//TASK_38
+int* test_result_table = (int*)malloc(sizeof(int)*ncol_test_table) ;
+int** TestSchedule =  (int**)malloc(sizeof(int*)*nrow_testschedule) ;
 /*=======================================================================
 Set up linked list for the management group
 ========================================================================*/
@@ -402,6 +485,11 @@ for(i = 0; i < id_bull_group + 2 ; i++)
 		NumGrpAnimal[i][abc] = 0;
 	}
 }
+
+for(i=0; i<=id_dry_group; i++)
+{
+	GroupSampleSize[i] = (int*)malloc(sizeof(int)*2) ; //number of column is 2: slaughter and alive
+}
 //now read the cull_sell_rate table	
 printf("Start read");
 read_cull_sell_rate(CullSellRatesFile,cull_sell_rate,num_cull_sell_steps) ;	
@@ -421,7 +509,60 @@ for(i = 0; i < id_bull_group+1; i++)
      	      FarmGroupList[i] = NULL; // initialise the animal struct
 			      	    }
 
-	      	    
+for(i=0;i<nrow_testschedule;i++)
+{
+	TestSchedule = (int*)malloc( sizeof(int) * ncol_testschedule);
+}
+read_testschedule(TestScheduleFile,TestSchedule,nrow_testschedule) ;
+
+/*==================================================================================================================*/
+
+
+
+
+
+
+			      	    
+/*==========FROM HERE FARM SPECIFIC========================================================================*/			      	    
+herd_id = 0 ;
+var_cull = 0;
+var_death = 0;
+var_sold = 0;
+var_bobby = 0;			      	    
+struct animal_node **animal_node_pointer = malloc( sizeof(struct animal_node*) * length_animal_pointer);
+	   
+/*======ADD TEST EVENT======================================================*/
+//can I pass test table information from R?
+test_freq = 0;
+for(i=0;i<nrow_testschedule;i++)
+{
+	if(TestSchedule[i][0]==herd_id)
+	{
+	test_date = TestSchedule[i][1] ;//TASK_40
+	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+    new_event->event_type = 12;//testing
+    new_event->next_node = NULL ;
+    add_event_node(event_day,test_date, new_event) ;
+	test_freq++; // counter for total testing on this farm	
+	
+	}
+	if(TestSchedule[i][0]>herd_id)
+	{
+		break;
+	}
+}
+printf("Total test is %d",test_freq) ;
+last_test_date = test_date ;
+	   
+
+/*======ADD RISK EVENT==========================================*/
+//risk event date will be a parameter, random sample from some distribution
+//TASK_40
+	//risk_date =  ;
+	new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+    new_event->event_type = 16;//Risk events
+    new_event->next_node = NULL ;
+    add_event_node(event_day,risk_date, new_event) ;     	    
 /*Day 0
 Add R1/R2/Dry to the linked list*/
 //For now, assume no calves and heifers die and farmers only keep 
@@ -432,7 +573,7 @@ Add R1/R2/Dry to the linked list*/
 //adding R1 heifer
 for(i=0; i< herd_size * calf_keep_prop; i++ )
 {
-	mng_group = 1 ;
+	mng_group = id_r1_group ;
 	 //R1 heifers should be between 284 and 304 days old
 	current_age =  r1_initial_age - rand()%21 ;
 	current_index_cull_sell = 6;
@@ -464,7 +605,7 @@ for(i=0; i< herd_size * calf_keep_prop; i++ )
 	cull_sell_rate[current_index_cull_sell][column_sell_empty] + 
 	mortality[current_index_mortality][1] ;
 	//then mortality
-	List_mng_status[mng_group][1] = [mng_group][1] + markov_rate ;
+	List_mng_status[mng_group][1] = List_mng_status[mng_group][1] + markov_rate ;
 	
 	animal_node_pointer[current_akey]->sum_markov_rate = markov_rate ;
 	add_animal_group(FarmGroupList,mng_group, animal_node_pointer[current_akey]) ;
@@ -512,7 +653,7 @@ printf("R1 added");
 /*==================R2 HEIFER================================================================*/
 for(i=0; i< herd_size * calf_keep_prop; i++ )
 {
-	mng_group = 2 ;
+	mng_group = id_r2_group ;
 	current_age = 365+r1_initial_age-rand()%21;
 	//R2 heifers should be between 649 and 669 days old
 //	if(current_age <= 700)
@@ -630,7 +771,7 @@ int dry_calved = 0;
 int dry_culled =0;
 for(i=0; i< herd_size * (1-replacement_prop); i++ )
 {
-	mng_group = 4 ;//dry group when started
+	mng_group = id_dry_group ;//dry group when started
 	temp_prop = (double)rand()/(double)RAND_MAX ; //get a random value between 0 and 1
 	
 	animal_node_pointer[current_akey] =malloc(sizeof(struct animal_node)) ;
@@ -901,7 +1042,7 @@ int dry_season = 1 ;
 /*============================================================================================
 Day procedes
 =============================================================================================*/
-while(today_date<sim_days)
+while(today_date<sim_days || today_date<last_test_date+1)
 {
 	year = (int)floor(today_date/365);
 
@@ -1034,7 +1175,7 @@ printf("After update");
 		when do we recalculate rate again?
 		The end of the day! 
      	*/
-    /*======== CALVING==========================================*/
+/*======== CALVING==========================================*/
      	if(current_event->event_type==1  && current_event->animal->present==1)
      	{
      		
@@ -1057,39 +1198,13 @@ printf("After update");
      		current_animal->dried= 0;
      		
      	/*UPDATE colostrum status and add event to switch colostrum status*/
-     	/*UPDATING milk_number table*/	
-     		bovis_status = current_animal->mbovis_status ;
-     		
-     		if(bovis_status<=1)
-     		{
-			 bovis_index=0 ;
-			 }
-			 else
-			 {
-			 	bovis_index = bovis_status - 1 ;
-			 }	
-     		
-     		if(current_animal->mastitis_detected==1)
-     		{
-     			printf("wait, this animal just calved so CM shouldn't exist");
-     			system("pause");
-			 }
-			current_animal->non_colostrum = 0;//now in colostrum period
-			milk_numbers[bovis_index*3+current_animal->non_colostrum]++; 
-				 
-			 
-     		
-     	
-     		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
-			new_event->event_type = 13;//switching colostrum
-			new_event->akey = current_animal->akey;
-			new_event->animal = current_animal; //let's see if this works
-			new_event->next_node = NULL ;
-			if(next_non_markov_date+withhold_colostrum<sim_days)
-			{
-				add_event_node(event_day,next_non_markov_date+withhold_colostrum, new_event) ;
-			}	
-     		
+     	//UPDATE List_mng_status bovis numbers
+     	//whether this animal remains in the herd or culled, need to minus from the original group
+     	mbovis_status = current_animal->mbovis_status ;
+     	List_mng_status[current_grp][mbovis_status+5]--;
+     	List_mng_status[current_grp][0]--;
+     	//whetehr adding to the new group depends on whether this animal remains so check below
+     	//UPDATING milk_number table			
      		
      		
      //		printf("event is %d\n",current_event->event_type);
@@ -1110,7 +1225,7 @@ printf("After update");
      		
      		//if heifer -1 from heifer, if adult -1 from dry
      
-     		List_mng_status[current_grp][0]--;
+     	
      	//		if(current_grp==4)
      	//	{
      	//		printf("Dry cow is %d\n",(int)List_mng_status[id_dry_group][0]);
@@ -1122,9 +1237,40 @@ printf("After update");
      			system("pause");
 			 }
      		
-     		List_mng_status[id_lact_group][0]++;//whgether they are heifer or adult, goes to lact
-     		//remove R2 if there are 400 calved
-		
+     	//Now change this animal's group and related fields
+		 //need to change total rate of demographic right?
+		 //TASK_32	- no need this is done everytime when I update event rate
+     	//remove R2 if there are 400 calved
+		List_mng_status[id_lact_group][0]++;//whgether they are heifer or adult, goes to lact
+     	List_mng_status[id_lact_group][mbovis_status+5]++;
+     		if(mbovis_status<=1)
+     		{
+			 bovis_index=0 ;
+			 }
+			 else
+			 {
+			 	bovis_index = mbovis_status - 1 ;
+			 }	
+     		
+     		if(current_animal->mastitis_detected==1)
+     		{
+     			printf("wait, this animal just calved so CM shouldn't exist");
+     			system("pause");
+			 }
+			current_animal->non_colostrum = 0;//now in colostrum period
+			milk_numbers[bovis_index*3+current_animal->non_colostrum]++; 
+     	
+     		
+			if(next_non_markov_date+withhold_colostrum<sim_days)
+			{
+				new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+			    new_event->event_type = 13;//switching colostrum
+			    new_event->akey = current_animal->akey;
+			    new_event->animal = current_animal; //let's see if this works
+			    new_event->next_node = NULL ;
+				add_event_node(event_day,next_non_markov_date+withhold_colostrum, new_event) ;
+			}
+			
 		 	current_animal->pregnant_status = 0;
      		current_animal->sum_markov_rate = 
 					cull_sell_rate[current_animal->index_cull_sell][column_cull_empty+2*pregnant_status]+
@@ -1134,6 +1280,7 @@ printf("After update");
 		 	remove_animal_group(FarmGroupList,current_grp,current_animal);
      		current_animal->group = id_lact_group ; //change the group
      		add_animal_group(FarmGroupList,id_lact_group,current_animal);
+     		
      	if(target_milk_met ==0)
      		{
      			//heat will happne only if these animals are included for mating
@@ -1156,9 +1303,8 @@ printf("After update");
 			
      	if(List_mng_status[0][0]>herd_size * calf_keep_prop)
      	{
-     		//do we record the number of bobbied ?
-     		//maybe not, but in future calf movement should be considered
-     		//printf("Do not keep any more calf!\n");
+     	(num_bobby*) ++; 
+     	//late calvers still keep on calving (note no more R2 exists at this stage
      		
 		 }
 		 else if((double)rand()/(double)RAND_MAX<=calf_female_prop) //proportion of female and male 0.5
@@ -1184,11 +1330,25 @@ printf("After update");
 		next_cull_change_date = next_non_markov_date+cull_sell_rate[1][0] ;
 		next_mortality_change_date = next_non_markov_date+mortality[1][0] ;	
 		List_mng_status[id_calf_group][0]++;
+		List_mng_status[id_calf_group][column_Sus]++;
+		
+		//Add weaning event
+		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+		new_event->event_type = 14; //moving to the next group
+		new_event->next_node = NULL ;
+		new_event->animal = animal_node_pointer[current_akey];
+			if(next_non_markov_date+weaning_wks*7<sim_years*365)
+		{
+		add_event_node(event_day,next_non_markov_date+weaning_wks*7, new_event) ;//animals move to the next age group
+		
+		}
+		
 		if(List_mng_status[0][0]==1)
 		{
 			printf("The first calving date is %d in YEAR %d\n",calendar_day, year);
 			dry_season = 0;
 			system("pause");
+		
 		}
 	//	printf("Calf size is %lf\n",List_mng_status[0][0]);
 		//if this is the last animal to be kept
@@ -1258,8 +1418,31 @@ printf("After update");
 	
 		current_akey++;
 		 }
-		 
+		 else //this is male and becomes bobby, still not enough calves born
+		 {
+		 	(num_bobby*)++;
+		 	if(first_bobby_born==0)
+		 	{
+		 	//arrange calf pick up
+			//TASK_31
+			new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+		    new_event->event_type = 15; //moving to the next group
+		    new_event->next_node = NULL ;
+		     new_event->animal = animal_node_pointer[current_akey];
+		     last_pick_up = next_non_markov_date + 77 ; //11 weeks from teh first bobby born
+			if(next_non_markov_date+bobby_pickup<sim_years*365)
+		        {
+		        add_event_node(event_day,next_non_markov_date+bobby_pickup, new_event) ;//animals move to the next age group
+		
+		        }
+		        first_bobby_born = 1 ;
+			 }
+		 }
+		 //if the number of lact reaches to the target
 		 //remove all R2 when the calved cows reached 400
+		 //this happens only once per lactation
+		 //cows can calve after this but not heifers
+		 //assume all bobbies from R born on this date
 		 	if(List_mng_status[id_lact_group][0]==herd_size && target_milk_met==0)
      		{
      			printf("Day is %d",calendar_day);
@@ -1274,12 +1457,17 @@ printf("After update");
 				 	current_animal = FarmGroupList[id_r2_group];
 				 	while(current_animal!=NULL)
 				 	{
+				 		(num_bobby*)++;
 				 		current_animal->present = 0;
+				 		mbovis_status = current_animal->mbovis_status;
 				 		previous_animal = current_animal;
 				 		current_animal = current_animal->next_node;
 				 		remove_animal_group(FarmGroupList,id_r2_group,previous_animal);
 				 		List_mng_status[id_r2_group][0]--;
+				 		List_mng_status[id_r2_group][mbovis_status+5]--;
+				 		//TASK_30 - change bovis status
 				 		(*num_culled)++;
+				 		
 				 		
 					 }
 				 }
@@ -1497,11 +1685,34 @@ printf("After update");
 			while(current_animal!=NULL)
 			{
 				next_animal = current_animal->next_node;
+				mbovis_status = current_animal->mbovis_status ;
 				if(current_animal->pregnant_status==0)
 				{
 				remove_animal_group(FarmGroupList,id_lact_group,current_animal);
 				current_animal->present = 0;
 				List_mng_status[id_lact_group][0]--;
+				List_mng_status[id_lact_group][mbovis_status+5]--;
+				//this changes the colostrum milk status
+				//TASK_33	
+     		
+     				if(mbovis_status<=1)
+     				{
+			 		bovis_index=0 ;
+					}
+					else
+					{
+			 			bovis_index = mbovis_status - 1 ;
+					}
+     				///update milk_numbers table
+     				if(current_animal->mastitis_detected==0)
+     				{//milk_numbers table changes only when CM not detected
+					milk_numbers[bovis_index*3+current_animal->non_colostrum]--; 
+					}
+					else
+					{
+					milk_numbers[bovis_index*3+2]--; 	
+					}
+			 
 				(*num_culled)++;
 				printf("empty culled at scanning\n");	
 				}
@@ -1520,6 +1731,8 @@ printf("After update");
 				remove_animal_group(FarmGroupList,id_r2_group,current_animal);
 				current_animal->present = 0;
 				List_mng_status[id_r2_group][0]--;
+				List_mng_status[id_r2_group][mbovis_status+5]--;
+				//TASK_33
 				(*num_culled)++;	
 				}
 				current_animal = next_animal ;
@@ -1537,9 +1750,9 @@ printf("After update");
 	//		printf("Now Lact is %d",(int)List_mng_status[id_lact_group][0]);
 	//		system("pause");
 	//	printf("event is %d\n",current_event->event_type);
-		if(FarmGroupList[2]!=NULL)
+		if(FarmGroupList[id_r2_group]!=NULL)
 		{
-			current_animal = FarmGroupList[2];
+			current_animal = FarmGroupList[id_r2_group];
 		//	printf("There are still animals in R2! Day is %d\n",next_non_markov_date) ;
 		//	system("pause");
 			//these animals will be culled
@@ -1559,36 +1772,37 @@ printf("After update");
 			}
 		//	printf("Now R2 is %d",(int)List_mng_status[id_r2_group][0]);
 	//		system("pause");
-			FarmGroupList[2] = NULL;
+			FarmGroupList[id_r2_group] = NULL;
+			
 		}
 	//	if(FarmGroupList[1]==NULL)
 	//	{
 	//		printf("There is no animals in R1!\n");
 	//	}
-		if(FarmGroupList[2]==NULL) //now if R2 becomes 0
+		if(FarmGroupList[id_r2_group]==NULL) //now if R2 becomes 0
 		{//
 		
-			current_animal = FarmGroupList[1] ;
+			current_animal = FarmGroupList[id_r1_group] ;
 			while(current_animal!=NULL)
 			{
 				current_animal->group = id_r2_group;
 				current_animal = current_animal->next_node;
 			}
-			current_animal = FarmGroupList[1] ;//again get the first animal
-			FarmGroupList[2] = current_animal ;
-			FarmGroupList[1] = NULL;
-			temp_num_animal = List_mng_status[1][0]; //R1 heifers
-			List_mng_status[2][0] = temp_num_animal;
+			current_animal = FarmGroupList[id_r1_group] ;//again get the first animal
+			FarmGroupList[id_r2_group] = current_animal ;
+			FarmGroupList[id_r1_group] = NULL;
+			temp_num_animal = List_mng_status[id_r1_group][0]; //R1 heifers
+			List_mng_status[id_r2_group][0] = temp_num_animal;
 	//		printf("R2 heifer is %d",temp_num_animal);
 			
-			if(FarmGroupList[0]==NULL)
+			if(FarmGroupList[id_calf_weaned]==NULL)
 			{
 				printf("There is no animals in calf:YEAR %d\n",year) ;
 				system("pause");
 			}
 			else
 			{
-				if(List_mng_status[0][0]<=0)
+				if(List_mng_status[id_calf_weaned][0]<=0)
 				{
 					printf("FarmGroupList has calves but not in List_mng");
 					system("pause");
@@ -1596,21 +1810,28 @@ printf("After update");
 				else
 				{
 					
-					temp_num_animal = List_mng_status[0][0];
-					List_mng_status[1][0] = temp_num_animal;
+					temp_num_animal = List_mng_status[id_calf_weaned][0];
+					List_mng_status[id_r1_group][0] = temp_num_animal;
 					printf("R1 heifer is %d",temp_num_animal);
-					List_mng_status[0][0]=0; //all calves gone
-					current_animal = FarmGroupList[0] ;
+					List_mng_status[id_calf_weaned][0]=0; //all calves gone
+					current_animal = FarmGroupList[id_calf_weaned] ;
 					while(current_animal!=NULL)
 					{
 					current_animal->group = id_r1_group;
 					current_animal = current_animal->next_node;
 					}
-					current_animal = FarmGroupList[0] ;//get the first animal again
-					FarmGroupList[1] = current_animal ;
-					FarmGroupList[0] = NULL ;
+					current_animal = FarmGroupList[id_calf_weaned] ;//get the first animal again
+					FarmGroupList[id_r1_group] = current_animal ;
+					FarmGroupList[id_calf_weaned] = NULL ;
 				}
 				
+			}
+			//transfer List_mng_status information other than the total number of animals
+			for(i=column_Sus; i<= column_Exp; i++)
+			{
+				List_mng_status[id_r2_group][i] = List_mng_status[id_r1_group][i]; //r1 to r2
+				List_mng_status[id_r1_group][i] = List_mng_status[id_calf_weaned][i]; //r1 to r2
+				List_mng_status[id_calf_weaned][i] = 0;
 			}
 		}
 	}
@@ -1619,6 +1840,7 @@ printf("After update");
 	{//cows go from 3 to 4 
 	target_calf_met=0;
 	target_milk_met=0;
+	first_bobby_born = 0 ;
 	dry_season = 1 ;
 	int num_lact = 0;
 	int num_dry = 0;
@@ -1695,11 +1917,17 @@ printf("After update");
 				List_mng_status[id_lact_group][0]=0;
 				List_mng_status[id_lact_group][1]=0;
 				List_mng_status[id_dry_group][0]=temp_num_animal;
+				
+				for(i = column_Sus; i<= column_Cli_shed; i++)
+				{
+					List_mng_status[id_dry_group][i] = List_mng_status[id_lact_group][i];
+					List_mng_status[id_lact_group][i] = 0;
+				}
 					if(temp_num_animal<0)
-     		{
-     			printf("Warning! Number in Dry gets below 0");
-     			system("pause");
-			 }
+     					{
+     						printf("Warning! Number in Dry gets below 0");
+     						system("pause");
+						 }
 			}
 		}	
 	}
@@ -1795,14 +2023,14 @@ printf("After update");
 				current_animal->NB_mastitis_status=0; //CM due to non-bovis cured	
 			if(current_animal->mbovis_status!=3)
 	    	{//if CM was only due to non-bovis
-	    		bovis_status = current_animal->mbovis_status;
-				if(bovis_status<=1)
+	    		mbovis_status = current_animal->mbovis_status;
+				if(mbovis_status<=1)
 				{
 					bovis_index = 0;	
 				}
 				else
 				{
-				bovis_index = bovis_status -1 ;
+				bovis_index = mbovis_status -1 ;
 				}
 	    		
 	    		//TASK_19
@@ -1836,85 +2064,462 @@ printf("After update");
 	
 /*===============EVENT 12: SURVEILLANCE TESTING: USE REAL DATA===============*/
 //TASK_16
-	if(current_event->event_type==12) //testing for MBOVIS 
+
+if(current_event->event_type==12) //testing for MBOVIS 
+{
+
+
+//test bulk or dicard
+if(test_schedule[k][btank]==1)
+{
+	shedder = milk_numbers[4]+milk_numbers[7];
+	total = milk_numbers[1]+shedder ;
+	test_bulk(0,shedder,total,dilution,PCR_live, test_result_table);
+}
+if(test_schedule[k][bdisc]==1)
+{
+	shedder = milk_numbers[3]+milk_numbers[5]+milk_numbers[6]+milk_numbers[8];//colostrum or detected
+	total = milk_numbers[0]+milk_numbers[2]+shedder ;
+	test_bulk(1,shedder,total,dilution,PCR_live, test_result_table);
+}
+/*======Determine the observed sample size for slaughter and live samples.
+Get the largest sample size for each sample type (PCR -nomilk or PCR - milk OR ELISA=====*/
+//========CALF======================================================
+group = 0;	
+ELISA_type = test_schedule[k][elisa_type] ;
+//target_live_calf and target_slaughter_calf is the largest sample size of all sample types
+if(test_schedule[k][slaughter_pcr_nomilk_calf+4*group]>=test_schedule[k][slaughter_pcr_nomilk_calf+1+4*group])
+{
+	target_slaughter_calf = test_schedule[k][slaughter_pcr_nomilk_calf+4*group] ;
+}
+else
+{
+	target_slaughter_calf = test_schedule[k][slaughter_pcr_nomilk_calf+1+4*group];
+}
+
+//target_live_calf
+if(test_schedule[k][live_pcr_nomilk_calf+4*group]>=test_schedule[k][live_pcr_nomilk_calf+1+4*group])
+{
+	target_live_calf = test_schedule[k][live_pcr_nomilk_calf+4*group];
+}
+else
+{
+	target_live_calf = test_schedule[k][live_pcr_nomilk_calf+1+4*group] ;
+}
+
+//========================Adult==================================================*/
+group = 1 ;
+if(test_schedule[k][slaughter_pcr_nomilk_calf+4*group]>=test_schedule[k][slaughter_pcr_nomilk_calf+1+4*group])
+{
+	target_slaughter_adult = test_schedule[k][slaughter_pcr_nomilk_calf+4*group] ;//never worry that it has calf in column - just specifying the first column
+}
+else
+{
+	target_slaughter_adult = test_schedule[k][slaughter_pcr_nomilk_calf+1+4*group];
+}
+
+
+//target_live_adult
+if(test_schedule[k][live_pcr_nomilk_calf+4*group]>=test_schedule[k][live_pcr_nomilk_calf+1+4*group] && 
+test_schedule[k][live_pcr_nomilk_calf+4*group]>=test_schedule[k][live_pcr_nomilk_calf+2+4*group])
+{
+	target_live_adult = test_schedule[k][live_pcr_nomilk_calf+4*group] ;
+}
+else if(test_schedule[k][live_pcr_nomilk_calf+1+4*group]>=test_schedule[k][live_pcr_nomilk_calf+4*group] && 
+test_schedule[k][live_pcr_nomilk_calf+1+4*group]>=test_schedule[k][live_pcr_nomilk_calf+2+4*group])
+{
+	target_live_adult = test_schedule[k][live_pcr_nomilk_calf+1+4*group] ;
+}
+else
+{
+	target_live_adult = test_schedule[k][live_pcr_nomilk_calf+2+4*group] ;
+}
+//===================================ADULT ENDS
+
+/*=========Determine how many samples to collect for slaughter and live in each management group======*/
+target_adult = target_live_adult + target_slaughter_adult;
+slaughter = 0;
+live = 1 ;
+
+//I prioritise slaughter sample
+//so collect samples from calf, wean and R1, R2 as slaughter
+//once slaughter sample size is met then finally start collecting live
+//Decide how many samples to choose from each management group
+for(i=0;i<id_bull_group;i++)
+{
+	GroupSampleSize[i][slaughter] = 0;
+	GroupSampleSize[i][live] = 0;
+	if(target_slaughter_calf +target_live_calf >0 && i <= id_r2_group) //if need calf sampling
 	{
-		//is it ELISA or PCR?
-		//Is animal slaughtered?
-		//milk or serum sample? bulk or individual milk?
-		//when? how animals chosen?
-		//# animals chosen randomly plus # designed to sample
-		
-		/*Step1*/
-		//read surveillance table for this herd
-		test_type = surveillance_table[c][r] ;
-		test_grp = surveillance_table[c][r] ;
-		sample_size = surveillance_table[c][r] ;
-		previous_positive = n ;
-		counter = 0 ;
-		collected_size = 0;
-		animal_to_chose = FarmGroupList[test_grp];
-		//random sampling - chose sample_size - n animals
-		//plan A - get n numbers from size and take them? need to store 100 or 50 numbers
-		//plan B - but in reality it's more like a systematic random sampling
-		
-		if(sample_size>List_mng_status[test_grp][0]) //if sample size larger than than herd size
+		if(target_slaughter_calf<=List_mng_status[i][0])
 		{
-		//test everything	
+			GroupSampleSize[i][slaughter] = target_slaughter_calf; //all calf samples are from id_calf_group
+			target_slaughter_calf = 0;
+			if(target_live_calf <= List_mng_status[i][0] - target_slaughter_calf )
+			{
+			GroupSampleSize[i][live] = target_live_calf;
+			target_live_calf = 0;
+			}
+			else
+			{
+			GroupSampleSize[i][live] =	List_mng_status[i][0]- target_slaughter_calf;
+			target_live_calf = target_live_calf - GroupSampleSize[i][live];
+			}
+		
 		}
 		else
 		{
-			every_nth = floor(List_mng_status[test_grp][0]/(sample_size -previous_positive ));
-			initial_number = rand()%every_nth+1 ;
-			while(collected_size<sample_size)
+			GroupSampleSize[i][slaughter] = List_mng_status[i][0];
+			target_slaughter_calf = target_slaughter_calf - List_mng_status[i][0] ;
+			GroupSampleSize[i][live] = 0 ;
+			//if require_calf_slaughter is <0 then all slaughter sample is collected but not live
+			//if >0 then  List_mng_status[i][0] were all used for slaughter and not for live
+		}
+	}
+	else if(i>=id_lact_group && target_adult>0)
+	{
+		if(FarmGroupList[i]!=NULL)
+		{
+			if(target_slaughter_adult+taget_live_adult<=List_mng_status[i][0])
 			{
-				//sample and test
-				while(counter<initial_number)
+				GroupSampleSize[i][slaughter] = target_slaughter_adult ;
+				GroupSampleSize[i][live] = taget_live_adult ;
+			}
+			else if(target_slaughter_adult <= List_mng_status[i][0])
+			{
+				GroupSampleSize[i][slaughter] =target_slaughter_adult;
+				GroupSampleSize[i][live] = List_mng_status[i][0] - target_slaughter_adult;
+			}
+			else
+			{
+				GroupSampleSize[i][slaughter] = List_mng_status[i][0];
+				GroupSampleSize[i][live] = 0 ;
+			}
+			target_adult = 0;
+		}
+	}
+
+}
+/*=========ENDS: Determine how many samples to collect for slaughter and live in each management group======*/
+
+/*=======Do adult and calf sampling as a loop=====================================================*/
+for(i=0;i<=Id_dry_group;i++)
+{
+	//TASK_37
+N_PPS = 0;
+N_H = 0;
+counter_slaughter = 0;//this counts the number of sample collected for slaughter in a given mangement grp
+counter_live = 0;//same for live samples
+counter_interval_sick = 0;
+counter_interval_healthy = 0;
+
+if(GroupSampleSize[i][slaughter]+GroupSampleSize[i][live]>0)
+{//if sampling from this group
+
+	if(i==id_calf_group)
+	{
+	group = 0 ;
+	counter_slaughter_pcr_nomilk = test_schedule[k][slaughter_pcr_nomilk_calf] ;
+	counter_slaughter_ELISA = test_schedule[k][slaughter_elisa_calf] ;	
+	
+	counter_live_pcr_nomilk = test_schedule[k][live_pcr_nomilk_calf];
+	counter_live_ELISA = test_schedule[k][live_elisa_calf] ;
+	}
+	else if(i>=id_lact_group)
+	{
+	group = 1 ;
+	counter_slaughter_pcr_nomilk = test_schedule[k][slaughter_pcr_nomilk_adult] ;
+	counter_slaughter_ELISA = test_schedule[k][slaughter_elisa_adult] ;
+	
+	counter_live_pcr_nomilk = test_schedule[k][live_pcr_nomilk_adult];
+	counter_live_pcr_milk = test_schedule[k][live_pcr_milk];
+	counter_live_ELISA = test_schedule[k][live_elisa_adult] ;
+	}
+//Count hoe many sick animals exist in this group
+current_animal = FarmGroupList[i];
+	while(current_animal!=NULL)
+	{
+		if(current_animal->mbovis_elisa_status==1||current_animal->mbovis_pcr_status==1||current_animal->mastitis_detected==1)
+		{
+		N_PPS++;	
+		}
+		current_animal=current_animal->next_node;
+	}
+	N_H = List_mng_status[i][0] - N_PPS ;
+
+/*=======Two scenarios of sampling: =======*/
+
+
+//Scenario 1: slaughter + live < sick: collecting all samples from sick animals
+if(GroupSampleSize[i][slaughter]+ GroupSampleSize[i][live]<= N_PPS)//if sample size from slaughter is less than N_PPS, take all from this group
+{
+	
+	//Determine sampling interval
+	sampling_interval_sick = floor((GroupSampleSize[i][slaughter]+ GroupSampleSize[i][live])/N_PPS);
+	if(sampling_interval_sick<1)
+	{
+	sampling_interval_sick = 1 ;
+	}
+current_animal = FarmGroupList[i];
+while(current_animal!=NULL)
+{
+	//sampling sick animals for both slaughter and live
+	if(current_animal->mbovis_elisa_status==1||current_animal->mbovis_pcr_status==1||current_animal->mastitis_detected==1)
+	{
+	counter_interval_sick++;
+	if(counter_interval_sick<sampling_interval_sick)
+		{
+		current_animal = current_animal->next_node;
+		}	
+	else
+		{
+		counter_interval_sick = 0;
+		if(counter_slaughter<GroupSampleSize[i][slaughter])
+		{
+			//still slaughter samples
+				if(counter_slaughter_pcr_nomilk>0)
 				{
-					if(animal_to_chose->previous_positive==1)
+				counter_slaughter_pcr_nomilk--;
+				test(current_animal,test_pcr_slaughter_nomilk,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+			
+				if(counter_slaughter_ELISA>0 && ELISA_type<=2)
+				{
+				counter_slaughter_ELISA--;
+				test(current_animal,ELISA_type,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+		if(current_animal->present = 0) // means this animal was slaughtered
+		{
+			N_PPS--;//how many PPS remaining
+			mbovis_status = current_animal->mbovis_status;
+			List_mng_status[i][0] --;
+			List_mng_status[i][mbovis_status+5] --;
+					if(dry_season==0 && group ==1)
 					{
-						//if previous positive test but not increase the counter 
-						//test
-						animal_to_chose = animal_to_chose->next_node;
-						collected_size++;	
-					}
-					else
-					{
-						counter++;	
-						if(counter==initial_number)
+						if(mbovis_status<=1)
 						{
-						//test this animal
-						animal_to_chose->mbovis_elisa_status = ;
-						//need to think if I should make onlt one var to combine ELISA+PCR result
-						//store test result
-						counter = 0 ;//reset
-						animal_to_chose = animal_to_chose->next_node;
-						collected_size ++ ;
-						break;	
+						mbovis_status = 0;	
 						}
 						else
 						{
-						animal_to_chose = animal_to_chose->next_node;	
-						}	
+						mbovis_status = mbovis_status - 1 ;
+						}
+					milk_numbers[mbovis_status*3+current_animal->non_colostrum]--;
 					}
+		animal_to_remove = current_animal;
+		current_animal = current_animal->next_node;
+		remove_animal_group(FarmGroupList, i, animal_to_remove);	
+		counter_slaughter++;		
+		}		
+				
+		}//slaughter sampling done
+		else if(counter_live<GroupSampleSize[i][live])
+		{
+				if(counter_live_pcr_nomilk>0)
+				{
+				counter_live_pcr_nomilk--;
+				test(current_animal,test_pcr_live_nomilk,live,group,test_result_table) ;
 				}
-			}
+				if(counter_live_pcr_milk>0)
+				{
+				counter_live_pcr_milk--;
+				test(current_animal,test_pcr_milk,live,group,test_result_table) ;
+				}
+				if(counter_live_ELISA>0 && ELISA_type<=2)
+				{
+				counter_live_ELISA--;
+				test(current_animal,ELISA_type,live,group,test_result_table) ;
+				}
+				counter_live++;
+				curent_animal = current_animal->next_node;
 		}
-	//Now record testing results
+		}
 	}
+	else
+	{
+		current_animal = current_animal->next_node;
+	}
+	if(counter_slaughter==GroupSampleSize[i][slaughter] && counter_live==GroupSampleSize[i][live])
+	{
+		break;
+	}
+	///while loop ends when enough sample collected or reached to the end
+}
+}//scneario 1 ends: when all samples can be taken from sick animals
+
+//Scenario 2: slaughter sample is larger than N_PPS
+//Need to sample from N_H for slaughter
+else if(GroupSampleSize[i][slaughter] <= N_PPS + N_H)
+{
+//take all sick for slaughter
+current_animal = FarmGroupList[i];
+while(counter_slaughter < GroupSampleSize[i][slaughter]||counter_live<GroupSampleSize[i][live])
+{
+	if(current_animal->mbovis_elisa_status==1||current_animal->mbovis_pcr_status==1||current_animal->mastitis_detected==1)
+	{
+				if(counter_slaughter_pcr_nomilk>0)
+				{
+				counter_slaughter_pcr_nomilk--;
+				test(current_animal,test_pcr_slaughter_nomilk,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+				if(counter_slaughter_ELISA>0 && ELISA_type<=2)
+				{
+				counter_slaughter_ELISA--;
+				test(current_animal,ELISA_type,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+				//what do they do when animals found positive?
+		if(current_animal->present = 0) // means this animal was slaughtered
+		{
+			N_PPS--;//how many PPS remaining
+			mbovis_status = current_animal->mbovis_status;
+			List_mng_status[i][0] --;
+			List_mng_status[i][mbovis_status+5] --;
+					if(dry_season==0 && group ==1)
+					{
+						if(mbovis_status<=1)
+						{
+						mbovis_status = 0;	
+						}
+						else
+						{
+						mbovis_status = mbovis_status - 1 ;
+						}
+					milk_numbers[mbovis_status*3+current_animal->non_colostrum]--;
+					}
+		animal_to_remove = current_animal;
+		current_animal = current_animal->next_node;
+		remove_animal_group(FarmGroupList, i, animal_to_remove);	
+		counter_slaughter++;		
+		}	
+	}//all sick animals are slaughtered
+	else
+	{
+		current_animal=current_animal->next_node;
+	}
+//when finishing collecting all sick animals
+//then start sampling from healthy for slaughter
+//can collect slaughter and live sample at the same time
+if(N_PPS==0)
+{
+current_animal = FarmGroupList[i];//reset
+counter_interval_healthy = 0;
+sampling_interval_healthy = floor((GroupSampleSize[i][slaughter]+ GroupSampleSize[i][live]-counter_slaughter)/N_H);
+if(sampling_interval_healthy<1)
+{
+sampling_interval_healthy = 1 ;
+}
+
+while(current_animal!=NULL)
+{
+//First collect remaining slaughter samples
+//Then collect live samples later
+counter_interval_healthy++;
+if(counter_interval_healthy<sampling_interval_healthy)
+{
+	current_animal=current_animal->next_node;
+}
+else
+{
+	counter_interval_healthy = 0; //reset
+	if(counter_slaughter<GroupSampleSize[i][slaughter])
+	{
+	//still slaughtering
+				if(counter_slaughter_pcr_nomilk>0)
+				{
+				counter_slaughter_pcr_nomilk--;
+				test(current_animal,test_pcr_slaughter_nomilk,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+				if(counter_slaughter_ELISA>0 && ELISA_type<=2)
+				{
+				counter_slaughter_ELISA--;
+				test(current_animal,ELISA_type,slaughter,group,test_result_table) ;
+				current_animal->present = 0;
+				}
+		if(current_animal->present = 0) // means this animal was slaughtered
+		{
+			N_H--;//how many PPS remaining
+			mbovis_status = current_animal->mbovis_status;
+			List_mng_status[i][0] --;
+			List_mng_status[i][mbovis_status+5] --;
+					if(dry_season==0 && group ==1)
+					{
+						if(mbovis_status<=1)
+						{
+						mbovis_status = 0;	
+						}
+						else
+						{
+						mbovis_status = mbovis_status - 1 ;
+						}
+					milk_numbers[mbovis_status*3+current_animal->non_colostrum]--;
+					}
+		animal_to_remove = current_animal;
+		current_animal = current_animal->next_node;
+		remove_animal_group(FarmGroupList, i, animal_to_remove);	
+		counter_slaughter++;		
+		}
+	}
+	else if(counter_live<GroupSampleSize[i][live])
+	{//live sample
+				if(counter_live_pcr_nomilk>0)
+				{
+				counter_live_pcr_nomilk--;
+				test(current_animal,test_pcr_live_nomilk,live,group,test_result_table) ;
+				}
+				if(counter_live_pcr_milk>0)
+				{
+				counter_live_pcr_milk--;
+				test(current_animal,test_pcr_milk,live,group,test_result_table) ;
+				}
+				if(counter_live_ELISA>0 && ELISA_type<=2)
+				{
+				counter_live_ELISA--;
+				test(current_animal,ELISA_type,live,group,test_result_table) ;
+				}
+				counter_live++;
+				curent_animal = current_animal->next_node;
+	}//live sample done
+}
+
+if(counter_slaughter==GroupSampleSize[i][slaughter] && counter_live==GroupSampleSize[i][live])
+	{
+		break;
+	}		
+}//while current_animal!=NULL Done
+} //If N_PPS = 0 DONE
+if(counter_slaughter==GroupSampleSize[i][slaughter] && counter_live==GroupSampleSize[i][live])
+	{
+		break;
+	}	
+}//All sampling done
+
+
+} //else if Scenario 2 ends
+
+} //sampling from this management group done
+
+} //loop for going over different management group done
+}
+/*========EVENT 12: Sampling done=====================================*/
 
 /*===============EVENT 13: Colostrum status change===============*/
 	if(current_event->event_type==13)
 	{
 		current_animal = current_event->animal ;
-		bovis_status = current_animal->mbovis_status ;
+		mbovis_status = current_animal->mbovis_status ;
      		
-     		if(bovis_status<=1)
+     		if(mbovis_status<=1)
      		{
 			 bovis_index=0 ;
 			}
 			else
 			{
-			 	bovis_index = bovis_status - 1 ;
+			 	bovis_index = mbovis_status - 1 ;
 			}
      		///update milk_numbers table
      		if(current_animal->mastitis_detected==0)
@@ -1925,7 +2530,98 @@ printf("After update");
 			 }
 				 
 	}
-/*===============EVENT 13: Colostrum status change ENDS===============*/	
+/*===============EVENT 13: Colostrum status change ENDS===============*/
+
+/*================EVENT 14: Weaning====================================*/
+//TASK_30
+	if(current_event->event_type==14)
+	{
+		current_animal = current_event->animal ;
+		current_grp = current_animal->group ;
+		mbovis_status = current_animal->mbovis_status;
+		//remove this animal to the next group
+		if(current_grp != id_calf_group)
+		{
+			printf("This is not calf!");
+			system("pause");
+		}
+		else
+		{
+			
+			List_mng_status[id_calf_group][0] --;
+			List_mng_status[id_calf_weaned][0] ++;
+			List_mng_status[id_calf_group][mbovis_status+column_Sus] --;
+			List_mng_status[id_calf_weaned][mbovis_status+column_Sus] ++;
+			//TASK_30
+			///change the numebr of mbovis depending on this animal status
+			remove_animal_group(FarmGroupList,current_grp,current_animal);
+     		current_animal->group = id_calf_weaned ; //change the group
+     		add_animal_group(FarmGroupList,id_calf_weaned,current_animal);
+		}
+     		
+     		
+				 
+	}
+/*===============EVENT 14: Weaning ends=================================*/
+
+/*================EVENT 15: Bobby pick up==================================*/
+//TASK_31
+if(current_event->event_type==15)
+	{
+		if((num_bobby*)==0)
+		{
+			printf("No bobby exists");
+		}
+		else
+		{
+			(num_bobby*) = 0 ;
+		}
+		if(next_non_markov_date+bobby_pickup<sim_days && next_non_markov_date+bobby_pickup < last_pick_up)
+		{
+		new_event = (struct event_node*)malloc(sizeof( struct event_node ));
+				new_event->event_type = 15;//treatment
+				new_event->akey = current_animal->akey;
+				new_event->animal = current_animal; //let's see if this works
+				new_event->next_node = NULL ;
+				add_event_node(event_day,next_non_markov_date+bobby_pickup, new_event) ;	
+		}
+		
+	}
+/*================EVENT 15: Bobby pick up ends==============================*/
+	
+/*=================EVENT 16: Risk Event========================*/
+if(current_event->event_type==16)
+   {//TASK_41
+	//because now I don't know what's the actual risk animal
+	//just assume one of milking animal is infected
+	//if in the dry season, then assume one of dry adult
+	if(dry_season==0)//milking season
+	{
+	group = id_lact_group ;
+    }
+    else
+    {
+    group = id_dry_group ;	
+	}
+	current_animal = FarmGroupList[group];
+	random_number = rand%()List_mng_status[group][0] + 1;
+	while(random_number>0)
+	{
+	random_number--;
+	    if(random_number==0)
+	    {
+		current_animal->mbovis_status=1 ;
+		break;
+		}
+	    else
+	    {
+	    current_animal= current_animal->next_node;	
+	    }	
+	}
+	
+   }
+
+/*=================EVENT 16: Risk Event done====================*/
 	
 	/*============================================================================*/
      	//MOVE to the next event
@@ -1979,6 +2675,7 @@ printf("Total sale is %d\n",*num_sold);
 printf("Total death is %d\n",*num_death);
 system("pause");
 	write_number_animals(NumberAnimalDataFile,NumGrpAnimal,id_bull_group,index_column) ;
+	write_test_result(TestResultFile, test_result_table,nrow_testschedule,ncol_test_table) ;
 
 } //main ends here
 
@@ -2087,7 +2784,8 @@ ADD update_markov_date
 double update_markov_date(double today_date, double **List_mng_status,
 double** cull_sell_rate, double** mortality,
 struct animal_node *FarmGroupList[], int next_non_markov_date,
-int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_conversion)
+int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_conversion, int id_lact_group2
+int* num_bobby)
 {
 // Calculate the sum of rate of M events
 	double day_to_markov;
@@ -2100,8 +2798,8 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 	double total_sero_conversion = 0.0 ;
 	double accumu_rate = 0.0 ;
 	double r_SE,r_EIs, r_IsIc, r_IcIs, r_IsE;
-	int av_milk_production = 15;
-	int calf_milk_consumption = 4;
+	double av_milk_production = 15.0;
+	double calf_milk_consumption = 4.0;
 	//double sum_subclinical_rate = 0.0;
 	//double sum_clinical_rate = 0.0;
 	//double sum_lameness_rate = 0.0 ;
@@ -2116,6 +2814,15 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 	int change ;
 	int num_CM_animal_undetected = 0;
 	int counter ;
+	
+	//milk related
+	double total_colostrum;
+	double waste_milk;
+	double healthy_milk;
+	double required_milk;
+	double shed_colostrum;
+	double shed_waste;
+	double shed_healthy;
 /*================================================================================*/
 /*===== Calculate the total rate for Markov events=================================*/
 //No need to count the numebr of each status but calculate disease rate
@@ -2146,7 +2853,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 		
 		
 /*=======Calculating total rate of clinical mastitis=================*/		
-	if(i==3 && dry_season==0)//meaning it's milking season
+	if(i==id_lact_group2 && dry_season==0)//meaning it's milking season
 	{
 		//calculating number of mastitis (do I need this because it should be stored in List_mng_status[3][3]
 	//	if(current_animal->mastitis_status==1)
@@ -2192,33 +2899,41 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 /// TASK_2 deleted
 		if(i==0 && dry_season==0)
 		{
+		//TASK_28 need to change milk supply - keep track of the total amount of colostrum and waste milk
+		//keep them in tank and infection pressure changes every day
+		//How do we do this? 
 		//TASK_12 add milk to calf transmission	
 		//transmission pressure depends on
 		//1. number of calves and number of animals with colostrum and their bovis status
 		//2. number of animals that are detected and their bovis status
-		total_colostrum waste_milk required_milk shed_colostrum beta
+	
 		total_colostrum = (milk_numbers[0]+milk_numbers[3]+milk_numbers[6])*av_milk_production;
 		waste_milk = (milk_numbers[2]+milk_numbers[5]+milk_numbers[8])*av_milk_production;
-		required_milk = List_mng_status[0][0]*calf_milk_consumption ;
+		healthy_milk = (milk_numbers[1]+milk_numbers[4]+milk_numbers[7])*av_milk_production;
+		required_milk = (List_mng_status[0][0]+(num_bobby*))*calf_milk_consumption ;
 		shed_colostrum = bv_f*milk_numbers[3] + milk_numbers[6];
 		shed_waste = bv_f*milk_numbers[5] + milk_numbers[8];
+		shed_healthy = bv_f*milk_numbers[4] + milk_numbers[7];
 		
 		//scenario1: when colostrum milk can afford all calves
-		if(total_colostrum>=required_milk)
+		//if(total_colostrum>=required_milk)
 		//if colostrum is sufficient
-			{
-			beta = shed_colostrum*beta_mc*calf_milk_consumption/total_colostrum;
-			}
+		//	{
+		//	beta = shed_colostrum*beta_mc*calf_milk_consumption/total_colostrum;
+		//	}
 			//here beta is the amount of infection pressure individual receives
 		//scenario2: when colostrum + waste milk can afford all calves
-		else if(total_colostrum+waste_milk>required_milk)
+		//TASK_28
+		if(total_colostrum+waste_milk>=required_milk)
 		{
-			beta = beta_mc*(shed_colostrum+shed_waste*(required_milk-total_colostrum)/waste_milk)/List_mng_status[0][0];
+			beta = beta_mc*(shed_colostrum+shed_waste)*calf_milk_consumption/(total_colostrum+waste_milk) ;
 		}
-		//scenario3: when milk powder is required
+		//scenario3: when more milk is required
 		else
 		{
-			beta = beta_mc*(shed_colostrum+shed_waste)/List_mng_status[0][0];
+			beta = beta_mc*(shed_colostrum+shed_waste+	(required_milk-total_colostrum-waste_milk)*shed_healthy/healthy_milk
+			)/(List_mng_status[0][0]+(num_bobby*));
+		 //this comes from [1], [4], [7]
 		}
 		List_mng_status[i][9] = beta*List_mng_status[i][5];
 		//for now calf there is no transition from exposed to infectious
@@ -2236,7 +2951,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 /*==========TRANSMISSION FROM COW TO CALVES DONE===============================*/
 
 /*==========TRANSMISSION BETWEEN COWS=====================================*/
-		if(i==3 && dry_season==0)
+		if(i==id_lact_group2 && dry_season==0)
 		{
 		//now have to add rate of subclinical mastitis happening if not under treatment (which is mastitis_detected==1)
 		//num_no_mastitis = List_mng_status[i][0] - List_mng_status[i][3] ;
@@ -2319,11 +3034,11 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 	int index_animal_to_chose = 0;
 	struct animal_node* animal_to_chose ;
 	
-	if(random_value<List_mng_status[3][15]) //CM incidnece
+	if(random_value<List_mng_status[id_lact_group2][15]) //CM incidnece
 	/*==============1. CM incidence===================================*/
 	{
 		//TASK_7 completed
-	animal_to_chose = 	FarmGroupList[3];
+	animal_to_chose = 	FarmGroupList[id_lact_group2];
 	/* TASK_7 TOP
 		if(random_value<sum_subclinical_rate)
 		{
@@ -2354,7 +3069,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 		///how many animals don't have non-bovis CM?
 		///Assumption_1: 
 		//each cows have different rate so need to consider that
-		random_value =  (double)(rand()+1)/(double)(RAND_MAX+1)*List_mng_status[3][15];
+		random_value =  (double)(rand()+1)/(double)(RAND_MAX+1)*List_mng_status[id_lact_group2][15];
 		
 		while(random_value>accumu_rate)
 		{
@@ -2407,7 +3122,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 		} TASK_8 remove lameness*/
 	}
 /*====================CM DETECTION========================================*/
-	else if((random_value-List_mng_status[3][15])<List_mng_status[3][16])
+	else if((random_value-List_mng_status[id_lact_group2][15])<List_mng_status[id_lact_group2][16])
 	{
 		//Assumption_2: 
 	//random_value =  (double)(rand()+1)/(double)(RAND_MAX+1)*List_mng_status[3][16];	
@@ -2460,16 +3175,16 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 				animal_to_chose->mastitis_rate = 0; //CM rate was non-zero before if CM was only due to bovis
 				//Update milk_numbers
 				//animals have CM - either bovis, non-bovis or both
-				bovis_status = animal_to_chose->mbovis_status ;
-				if(bovis_status==0)
+				mbovis_status = animal_to_chose->mbovis_status ;
+				if(mbovis_status==0)
 				{
 				milk_numbers[2]++;
 				milk_numbers[animal_to_chose->non_colostrum]--;
 				}
 				else
 				{
-				milk_numbers[(bovis_status-1)*3+2]++;
-				milk_numbers[(bovis_status-1)*3+animal_to_chose->non_colostrum]--;	
+				milk_numbers[(mbovis_status-1)*3+2]++;
+				milk_numbers[(mbovis_status-1)*3+animal_to_chose->non_colostrum]--;	
 				
 				}
 				
@@ -2522,7 +3237,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 				}
 		} TASK_9 remove lameness detection*/
 /*=================SERO-CONVERSION==================================*/
-	else if((random_value-List_mng_status[3][15]-List_mng_status[3][16])<total_sero_conversion)
+	else if((random_value-List_mng_status[id_lact_group2][15]-List_mng_status[id_lact_group2][16])<total_sero_conversion)
 	{
 	random_value = 	((double)(rand()+1)/(double)(RAND_MAX+1))*total_sero_conversion ;
 	while(random_value>accumu_rate)
@@ -2558,7 +3273,7 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 	else
 /*====================MBOVIS STATUS TRANSITION=============================*/
 	{
-	random_value = 	random_value - List_mng_status[3][15] -List_mng_status[3][16] -total_sero_conversion;
+	random_value = 	random_value - List_mng_status[id_lact_group2][15] -List_mng_status[id_lact_group2][16] -total_sero_conversion;
 	//i is already 0 in above
 	///TASK_15: need to add cow to calf transmission
 	while(random_value>accumu_rate)
@@ -2623,10 +3338,10 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 	//index_animal_to_chose indicates nth animal to choose
 	//index indicates which disease status to choose (e.g. 6 means E staus)
 	//index ranges 5 to 8, and status corresponds to 0 to 3
-	bovis_status = index-5 ;
+	mbovis_status = index-5 ;
 	while(counter<index_animal_to_chose)
 	{
-		if(animal_to_chose->mbovis_status==bovis_status) 
+		if(animal_to_chose->mbovis_status==mbovis_status) 
 		{
 		counter++:	
 		}
@@ -2634,17 +3349,17 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 		{
 		//TASK_19
 	    //Update milk_numbers table
-			if(bovis_status<=1)
+			if(mbovis_status<=1)
 			{
-				bovis_status = 0; //E set to 0 for milk_numbers table changing purpose
+				mbovis_status = 0; //E set to 0 for milk_numbers table changing purpose
 			}
 		  if(animal_to_chose->mastitis_detected==1)
 		  {
-		  	current_milk_numbers = bovis_status*3 + 2 ;
+		  	current_milk_numbers = mbovis_status*3 + 2 ;
 		  }
 		  else
 		  {
-		  	current_milk_numbers = bovis_status*3 + animal_to_chose->non_colostrum ;
+		  	current_milk_numbers = mbovis_status*3 + animal_to_chose->non_colostrum ;
 		  }
 		
 		if(index!=5)
@@ -2780,31 +3495,31 @@ int* num_culled, int* num_sold, int* num_death, double bv_f, double rate_sero_co
 		system("pause");
 	}
 	//Need to update List_mng_status-bovis status and milk_numbers table
-	bovis_status = current_animal->mbovis_status ;
-	List_mng_status[i-1][bovis_status+5]-- ;//minus
+	mbovis_status = current_animal->mbovis_status ;
+	List_mng_status[i-1][mbovis_status+5]-- ;//minus
 	//milk_numbers changes only if it is milking animals
 	if(i==4)
 	{
 		if(current_animal->mastitis_detected==1)
 			{
-			if(bovis_status==0)
+			if(mbovis_status==0)
 			{
 			milk_numbers[2]--;
 			}
 			else
 			{
-			milk_numbers[(bovis_status-1)*3+2]--;
+			milk_numbers[(mbovis_status-1)*3+2]--;
 			}
 			}
 		else
 			{
-			if(bovis_status==0)
+			if(mbovis_status==0)
 			{
 			milk_numbers[current_animal->non_colostrum]--;
 			}
 			else
 			{
-			milk_numbers[(bovis_status-1)*3+current_animal->non_colostrum]--;	
+			milk_numbers[(mbovis_status-1)*3+current_animal->non_colostrum]--;	
 			}
 			
 			}	
@@ -2927,6 +3642,61 @@ void read_mortality(char MortalityFile[], double **mortality, int num_mortality_
       }
       fclose(temp);
 }
+/*=======READ TEST SCHEDULE DATA===============================================================*/
+
+void read_testschedule(char TestScheduleFile[], int **TestSchedule, int nrow_testschedule)
+{     
+    /* OPEN INPUT FILE */
+    printf("Opening file");
+    FILE *temp = fopen(TestScheduleFile,"r"); 
+       
+    /* DECLARE STORAGE VARIABLES */
+    int line_num, id, date;
+    int slaughter_PCR_nomilk_calf,slaughter_PCR_milk_calf,slaughter_ELISA_calf;
+    int live_PCR_nomilk_calf,live_PCR_milk_calf,live_ELISA_calf;
+    int slaughter_PCR_nomilk_adult,slaughter_PCR_milk_adult,slaughter_ELISA_adult;
+    int live_PCR_nomilk_adult, live_PCR_milk_adult, live_ELISA_adult ;
+    int btank, bdisc, ELISA_type ;
+   
+    
+    /* READ LINES OF FARM FILE */
+    for(line_num = 0; line_num < nrow_testschedule; line_num++)
+      { 
+         fscanf(temp, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d, %d,%d,%d,%d,%d,%d, %d"
+		 ,&id, &date, 
+		 &slaughter_PCR_nomilk_calf, &slaughter_PCR_milk_calf,&slaughter_ELISA_calf,
+		 &live_PCR_nomilk_calf, &live_PCR_milk_calf,&live_ELISA_calf,
+		 &slaughter_PCR_nomilk_adult, &slaughter_PCR_milk_adult,&slaughter_ELISA_adult,
+		 &live_PCR_nomilk_adult, &live_PCR_milk_adult,&live_ELISA_adult,
+		 &btank, &bdisc, &ELISA_type
+		 );
+         
+             TestSchedule[line_num][0] = id;
+             TestSchedule[line_num][1] = date;
+             TestSchedule[line_num][2] = slaughter_PCR_nomilk_calf;
+             TestSchedule[line_num][3] = slaughter_PCR_milk_calf;
+             TestSchedule[line_num][4] = slaughter_ELISA_calf;
+             
+             TestSchedule[line_num][5] = live_PCR_nomilk_calf;
+             TestSchedule[line_num][6] = live_PCR_milk_calf;
+             TestSchedule[line_num][7] = live_ELISA_calf;
+             
+             TestSchedule[line_num][8] = slaughter_PCR_nomilk_adult;
+             TestSchedule[line_num][9] = slaughter_PCR_milk_adult;
+             TestSchedule[line_num][10] = slaughter_ELISA_adult;
+             
+             TestSchedule[line_num][11] = live_PCR_nomilk_adult;
+             TestSchedule[line_num][12] = live_PCR_milk_adult;
+             TestSchedule[line_num][13] = live_ELISA_adult;
+             
+             TestSchedule[line_num][14] = btank;
+             TestSchedule[line_num][15] = bdisc;
+             TestSchedule[line_num][16] = ELISA_type ;
+             
+      }
+      fclose(temp);
+}
+
 /*========WRITE DOWN THE NUMBER OF ANIMALS IN EACH MANAGEMENT GROUP IN A GIVEN TIME===================*/
 int write_number_animals(char* NumberAnimalDataFile,double** NumGrpAnimal,int id_bull_group,int n_column_output)
 {
@@ -2974,3 +3744,117 @@ void visualize_list(struct event_node *event_day[], int day)
 
 }
 
+/*=========TESTING ANIMALS=============================================================================*/
+void test(struct animal_node* current_animal,int test_type,int slaughter_live, int group,int* test_result_table,
+double Se_bio, double Sp_bio, double Se_ID, double Sp_ID, double PCR_live, double PCR_slaughter) 
+{
+	double random;
+	double Se, Sp;
+	random = (double)rand()/(double)RAND_MAX;
+	int slaughter_PCR = 0;
+	int ELISA_calf_bio = 1;
+	int ELISA_calf_ID = 2;
+	int ELISA_adult_bio = 3;
+	int ELISA_adult_ID = 4;
+	int PCR_calf = 5;
+	int PCR_adult_nomilk = 6;
+	int PCR_adult_milk = 7;
+
+	//need to include Se/Sp into passing parameters
+	if(test_type<=2)
+	{
+		if(test_type!=1) //ELISA bio
+		{
+			Se = Se_bio;
+			Sp = Sp_bio;
+			if((current_animal->mbovis_sero_status==1 && random<Se) ||
+			(current_animal->mbovis_sero_status==0 && random>Sp))
+			{
+		
+			current_animal->mbovis_elisa_status=1 ;
+			test_result_table[group*2+ELISA_calf_bio] ++;
+			} //detecting true pos
+		}
+		if(test_type!=0)
+		{
+			Se = Se_ID;
+			Sp = Sp_ID;
+			if((current_animal->mbovis_sero_status==1 && random<Se) ||
+			(current_animal->mbovis_sero_status==0 && random>Sp))
+			{
+		
+			current_animal->mbovis_elisa_status=1 ;
+			test_result_table[group*2+ELISA_calf_ID] ++;
+			}
+		}
+	
+	
+	}
+	else //ANY PCR
+	{
+		if(test_type==3)//live PCR nomilk
+		{
+			Se = PCR_live;
+			if(current_animal->mbovis_status>=1 && random < Se)
+			{
+			current_animal->mbovis_pcr_status=1 ;
+			test_result_table[PCR_calf+group] ++;	
+			}
+			
+		}
+		else if(test_type==4)//slaughter  PCR
+		{
+			Se = PCR_slaughter;
+			if(current_animal->mbovis_status>=1 && random < Se)
+			{
+			current_animal->mbovis_pcr_status=1 ;
+			test_result_table[slaughter_PCR] ++;	
+			}
+			
+		}
+		else //milk PCR
+		{
+			Se = PCR_live;
+			if(current_animal->mbovis_status>=2 && random < Se)
+		  	{
+		  	current_animal->mbovis_pcr_status=1 ;
+			test_result_table[PCR_adult_milk] ++;
+		  	}
+		}
+	
+
+	
+	}
+}
+
+/*=========Testing BULK MILK===================================================*/
+void test_bulk(int tank_discard, int shedder, int total, double dilution, double PCR_live, int* test_result_table)
+{
+	double prop = double(shedder)/double(total); //how much diluted
+	double random = (double)rand()/(double)RAND_MAX;
+	if(prop > dilution) //more than threshold
+	{
+		if(random < PCR_live)
+		{
+			test_result_table[8+tank_discard]++;
+		}
+	}
+}
+/*==========Exporting test_result_table==============================================*/
+int write_test_result(char* ResultFile,int* test_result_table,int nrow_testschedule,int n_column_output)
+{
+	FILE *Out = fopen(ResultFile, "w") ;
+	int line_num, col_num;
+	
+	for (line_num = 0 ; line_num < nrow_testschedule; line_num ++)
+	{
+		for (col_num = 0;col_num <n_column_output ; col_num++ )
+		
+		{
+	    fprintf(Out,"%d,",test_result_table[line_num][col_num]);
+        }
+        fprintf(Out,"\n");
+    }
+	fclose(Out);
+	return 0;
+}
